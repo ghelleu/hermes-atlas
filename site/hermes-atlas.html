@@ -1,0 +1,2489 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <!-- Hermes Atlas, version autonome : style, données et script sont dans ce seul fichier. -->
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Hermes Atlas</title>
+  <style>
+/*
+  HERMES ATLAS — feuille de style
+  Toutes les couleurs et toutes les tailles sont ici, dans :root.
+  app.js relit ces variables : changer une valeur suffit.
+  La scène est dessinée en 1920 × 1080 puis mise à l'échelle de l'écran.
+*/
+:root {
+  /* — Police : celle du système, aucune police téléchargée — */
+  --police: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --police-mono: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+
+  /* — Surfaces et encres — */
+  --plan: #eeeeea;             /* fond de page, autour de la scène */
+  --scene: #f5f5f2;            /* fond de la scène */
+  --halo: #ffffff;             /* lumière centrale de la scène */
+  --surface: #ffffff;          /* panneaux et composants */
+  --surface-2: #f4f4f1;        /* zones en retrait (preuve, segments) */
+  --encre: #0b0b0b;            /* texte principal */
+  --encre-2: #52514e;          /* texte secondaire */
+  --encre-3: #898781;          /* micro-titres, légendes */
+  --filet: #e4e3dd;            /* filets, guides de couche */
+  --bord: rgba(11, 11, 11, 0.09);
+  --ombre: 0 1px 2px rgba(20, 20, 15, 0.05), 0 8px 24px rgba(20, 20, 15, 0.07);
+  --accent: #2a78d6;           /* sélection, curseur, parcours */
+  --critique: #d03b3b;         /* état : en panne, en pause (réservé) */
+
+  /* — Couleurs des flux : une teinte = un seul sens (palette validée daltonisme) — */
+  --flux-evt: #2a78d6;     /* message entrant */
+  --flux-ctx: #4a3aa7;     /* contexte injecté */
+  --flux-outil: #52514e;   /* appel d'outil */
+  --flux-stdio: #1baf7a;   /* MCP stdio local */
+  --flux-http: #e87ba4;    /* MCP HTTP + OAuth */
+  --flux-ssh: #eb6834;     /* MCP SSH tailnet */
+  --flux-data: #eda100;    /* lecture / écriture */
+  --flux-git: #008300;     /* git et déploiement */
+  --flux-cout: #0b0b0b;    /* coût et latence (porté par une étiquette) */
+  --flux-off: #d03b3b;     /* hors service */
+  --flux-repos: #b9b8b0;   /* tous les flux, au repos */
+
+  /* — Typographie de la scène (px dans le repère 1920 × 1080) — */
+  --t-titre: 44px;
+  --t-surtitre: 12px;
+  --t-corps: 17px;
+  --t-petit: 14px;
+  --t-micro: 12px;
+  --t-fiche-titre: 30px;
+  --t-etape: 26px;
+
+  /* — Carte SVG (unités du repère) — */
+  --carte-gauche: 64;           /* début de la première couche */
+  --carte-droite: 1832;         /* fin de la dernière couche */
+  --carte-haut: 222;            /* sous les en-têtes de couche */
+  --carte-bas: 940;
+  --noeud-largeur: 144;          /* colonne de 196 : 52 d'air entre deux couches */
+  --noeud-pad-h: 11;
+  --noeud-pad-v: 9;
+  --noeud-espace: 14;
+  --noeud-rayon: 9;
+  --noeud-t-titre: 15;
+  --noeud-t-chiffre: 12.5;
+  --noeud-interligne: 1.22;
+  --t-etiquette: 12.5;
+  --t-couche: 11.5;
+
+  /* — Mouvement — */
+  --duree-intro: 1700;          /* ms, éclatement à l'ouverture */
+  --duree-etape: 1100;          /* ms, jeton sur un lien */
+  --estompe-noeud: 0.28;
+  --estompe-lien: 0.08;
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--plan);
+  font-family: var(--police);
+  color: var(--encre);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ——— Scène 1920 × 1080, mise à l'échelle par app.js ——— */
+.scene {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 1920px;
+  height: 1080px;
+  transform: translate(-50%, -50%) scale(var(--k, 1));
+  background: radial-gradient(ellipse 60% 55% at 58% 50%, var(--halo) 0%, var(--scene) 70%);
+  overflow: hidden;
+}
+
+button { font: inherit; color: inherit; cursor: pointer; }
+button:focus-visible, input:focus-visible, .noeud:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+kbd {
+  font: 600 11px var(--police);
+  color: var(--encre-2);
+  background: var(--surface);
+  border: 1px solid var(--bord);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  padding: 1px 6px;
+  margin-right: 3px;
+}
+
+/* ——— En-tête ——— */
+.entete { position: absolute; left: 40px; top: 34px; }
+.surtitre {
+  margin: 0;
+  font-size: var(--t-surtitre);
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--encre-3);
+  display: flex; align-items: center; gap: 8px;
+}
+.puce-ronde { width: 6px; height: 6px; border-radius: 50%; background: var(--encre); }
+.entete h1 { margin: 8px 0 6px; font-size: var(--t-titre); font-weight: 650; letter-spacing: -0.025em; line-height: 1; }
+.sous-ligne { margin: 0; font-size: var(--t-petit); color: var(--encre-3); }
+.sous-ligne b { color: var(--encre-2); font-weight: 600; }
+
+/* ——— Recherche ——— */
+.recherche {
+  position: absolute; right: 40px; top: 38px;
+  width: 320px; height: 42px;
+  display: flex; align-items: center; gap: 10px;
+  padding: 0 12px;
+  background: var(--surface);
+  border: 1px solid var(--bord);
+  border-radius: 12px;
+  box-shadow: var(--ombre);
+}
+.recherche svg { width: 17px; height: 17px; fill: none; stroke: var(--encre-3); stroke-width: 1.6; stroke-linecap: round; flex: none; }
+.recherche input { flex: 1; border: 0; outline: 0; background: transparent; font: 15px var(--police); color: var(--encre); }
+.recherche input::placeholder { color: var(--encre-3); }
+.recherche input::-webkit-search-cancel-button { display: none; }
+
+/* ——— Panneaux flottants ——— */
+.panneau {
+  position: absolute;
+  background: var(--surface);
+  border: 1px solid var(--bord);
+  border-radius: 16px;
+  box-shadow: var(--ombre);
+}
+.panneau-gauche { left: auto; right: 88px; top: 400px; width: 300px; padding: 16px 14px 12px; }
+.panneau-tete { display: flex; justify-content: space-between; align-items: center; padding: 0 4px 12px; }
+.panneau-tete h2 { margin: 0; font-size: 15px; font-weight: 650; }
+.compteur { font-size: 12px; font-weight: 600; color: var(--encre-2); background: var(--surface-2); border-radius: 6px; padding: 2px 7px; }
+.segments { display: grid; grid-template-columns: 1fr 1fr; gap: 2px; background: var(--surface-2); border-radius: 10px; padding: 3px; margin-bottom: 8px; }
+.segment { border: 0; background: transparent; border-radius: 8px; padding: 6px 0; font-size: 13px; font-weight: 550; color: var(--encre-2); }
+.segment[aria-selected="true"] { background: var(--surface); color: var(--encre); box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+
+.liste { list-style: none; margin: 0; padding: 0; }
+.ligne {
+  display: grid;
+  grid-template-columns: 28px 1fr auto 34px;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 6px;
+  border-radius: 9px;
+  font-size: 14px;
+  cursor: default;
+}
+.ligne:hover { background: var(--surface-2); }
+.ligne-num { font: 600 11px var(--police-mono); color: var(--encre-3); }
+.ligne-nom { color: var(--encre); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ligne-compte { font-size: 12px; color: var(--encre-3); font-variant-numeric: tabular-nums; }
+.ligne.eteinte .ligne-nom { color: var(--encre-3); }
+.echantillon { width: 28px; height: 12px; overflow: visible; }
+
+/* Interrupteur */
+.inter {
+  width: 32px; height: 18px; border-radius: 9px; border: 0; padding: 0;
+  background: #d6d5cf; position: relative; transition: background .2s;
+}
+.inter::after {
+  content: ""; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%;
+  background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.25); transition: transform .2s;
+}
+.inter[aria-checked="true"] { background: var(--encre); }
+.inter[aria-checked="true"]::after { transform: translateX(14px); }
+
+.panneau-pied { display: flex; justify-content: space-between; align-items: center; padding: 10px 6px 2px; margin-top: 6px; border-top: 1px solid var(--filet); font-size: 12px; color: var(--encre-3); }
+.lien-texte { border: 0; background: none; padding: 0; font-size: 12px; font-weight: 600; color: var(--encre-2); }
+.lien-texte:hover { color: var(--encre); }
+
+/* Panneau des couches : replié par défaut, il s'ouvre depuis la barre d'outils */
+.panneau-gauche { transition: opacity .25s, transform .25s; }
+.scene:not(.panneau-ouvert) .panneau-gauche,
+.scene.carte-ouverte .panneau-gauche { opacity: 0; transform: translateX(16px); pointer-events: none; visibility: hidden; }
+#btn-panneau[aria-pressed="true"] { background: var(--encre); }
+#btn-panneau[aria-pressed="true"] svg { stroke: #fff; }
+
+/* ——— Barre d'outils ——— */
+.outils {
+  position: absolute; right: 24px; top: 400px;
+  display: flex; flex-direction: column; gap: 4px;
+  padding: 6px;
+  background: var(--surface);
+  border: 1px solid var(--bord);
+  border-radius: 14px;
+  box-shadow: var(--ombre);
+}
+.outils button {
+  width: 38px; height: 38px; border: 0; border-radius: 9px; background: transparent;
+  display: grid; place-items: center;
+}
+.outils button:hover { background: var(--surface-2); }
+.outils svg { width: 18px; height: 18px; fill: none; stroke: var(--encre); stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+#btn-lecture { background: var(--encre); }
+#btn-lecture svg { fill: #fff; stroke: none; }
+#btn-lecture:hover { background: #333; }
+#btn-lecture .ic-pause, #btn-lecture.en-cours .ic-lecture { display: none; }
+#btn-lecture.en-cours .ic-pause { display: block; }
+#btn-etiquettes[aria-pressed="true"] { background: var(--encre); }
+#btn-etiquettes[aria-pressed="true"] svg { stroke: #fff; }
+.outils-sep { height: 1px; background: var(--filet); margin: 3px 6px; }
+
+/* ——— Curseur d'éclatement ——— */
+.eclate { left: 50%; bottom: 40px; transform: translateX(-50%); width: 420px; padding: 12px 18px 10px; }
+.eclate-tete { display: flex; justify-content: space-between; font-size: 13px; font-weight: 600; margin-bottom: 6px; }
+.eclate-valeur { font-variant-numeric: tabular-nums; color: var(--encre-2); background: var(--surface-2); border-radius: 6px; padding: 1px 7px; font-size: 12px; }
+.eclate-bornes { display: flex; justify-content: space-between; font-size: 11px; color: var(--encre-3); margin-top: 2px; }
+input[type="range"] { -webkit-appearance: none; appearance: none; width: 100%; height: 22px; background: transparent; margin: 0; }
+input[type="range"]::-webkit-slider-runnable-track { height: 3px; border-radius: 2px; background: linear-gradient(to right, var(--encre) var(--rempli, 100%), #dddcd6 var(--rempli, 100%)); }
+input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 16px; height: 16px; margin-top: -6.5px; border-radius: 50%; background: #fff; border: 1.5px solid var(--encre); box-shadow: 0 1px 3px rgba(0,0,0,.2); }
+
+/* ——— Pied de scène ——— */
+.pied { position: absolute; left: 40px; bottom: 30px; display: flex; gap: 18px; font-size: 12px; color: var(--encre-3); }
+.source { position: absolute; right: 40px; bottom: 30px; margin: 0; font-size: 12px; color: var(--encre-3); }
+
+/* ——— Carte SVG ——— */
+.carte { position: absolute; inset: 0; width: 1920px; height: 1080px; cursor: grab; user-select: none; }
+.carte.glisse { cursor: grabbing; }
+.carte text { font-family: var(--police); }
+
+.couche-guide { stroke: var(--filet); stroke-width: 1; }
+.couche-num { fill: var(--encre-3); font-family: var(--police-mono); font-weight: 600; }
+.couche-nom { fill: var(--encre); font-weight: 650; letter-spacing: 0.08em; text-transform: uppercase; }
+.couche.eteinte { opacity: .35; }
+
+/* Monolithe : l'architecture repliée en un seul programme */
+.mono-fond { fill: var(--surface); stroke: var(--bord); filter: drop-shadow(0 10px 30px rgba(20,20,15,.08)); }
+.mono-surtitre { fill: var(--encre-3); font-size: 12px; font-weight: 600; letter-spacing: .14em; }
+.mono-titre { fill: var(--encre); font-size: 34px; font-weight: 650; letter-spacing: -.02em; }
+.mono-ligne { fill: var(--encre-2); font-size: 16px; }
+.mono-citation { fill: var(--encre); font-size: 17px; font-style: italic; }
+.mono-source { fill: var(--encre-3); font-size: 12px; font-weight: 600; }
+.mono-trait { fill: var(--encre); opacity: .85; }
+
+/* Composants */
+.noeud { cursor: pointer; transition: opacity .25s; }
+.noeud-fond { fill: var(--surface); stroke: var(--bord); stroke-width: 1; }
+.noeud:hover .noeud-fond { stroke: rgba(11,11,11,.35); }
+.noeud-pastille { fill: var(--encre); }
+.noeud-titre { fill: var(--encre); font-weight: 620; }
+.noeud-chiffre { fill: var(--encre-3); }
+.noeud--non-branche .noeud-fond { fill: rgba(255,255,255,.4); stroke: #a3a29b; stroke-dasharray: 4 3; }
+.noeud--non-branche .noeud-pastille { fill: none; stroke: var(--encre-3); stroke-width: 1.3; }
+.noeud--non-branche .noeud-titre { fill: var(--encre-2); }
+.noeud--hors-perimetre .noeud-fond { fill: rgba(255,255,255,.4); stroke: #a3a29b; stroke-dasharray: 1 3; stroke-linecap: round; }
+.noeud--hors-perimetre .noeud-pastille { fill: none; stroke: var(--encre-3); stroke-width: 1.3; stroke-dasharray: 1 2; }
+.noeud--hors-perimetre .noeud-titre { fill: var(--encre-2); }
+.noeud--panne .noeud-pastille, .noeud--pause .noeud-pastille { fill: var(--critique); }
+.noeud--panne .noeud-chiffre, .noeud--pause .noeud-chiffre { fill: var(--critique); font-weight: 600; }
+.noeud--panne .noeud-fond, .noeud--pause .noeud-fond { stroke: rgba(208,59,59,.45); }
+.noeud.selectionne .noeud-fond { stroke: var(--encre); stroke-width: 1.6; stroke-dasharray: none; }
+.noeud.trouve .noeud-fond { stroke: var(--accent); stroke-width: 2; }
+
+/* Flux au repos : un filet gris. Actifs : la couleur de leur sens. */
+.flux path { fill: none; }
+.flux-trait { stroke: var(--flux-repos); stroke-width: 1; opacity: .7; transition: opacity .25s; }
+.flux-zone { stroke: transparent; stroke-width: 14; pointer-events: stroke; cursor: help; }
+.flux-perles { display: none; }
+.flux--off .flux-trait { stroke: var(--flux-off); stroke-dasharray: 4 4; opacity: .55; }
+
+.flux.actif .flux-trait { stroke-width: 2; opacity: 1; }
+.flux.actif .flux-perles { display: inline; stroke-width: 3.2; stroke-linecap: round; stroke-dasharray: 0.1 16; animation: perles 1.2s linear infinite; }
+@keyframes perles { to { stroke-dashoffset: -16.1; } }
+
+.flux--evt.actif .flux-trait   { stroke: var(--flux-evt); stroke-width: 2.6; }
+.flux--ctx.actif .flux-trait   { stroke: var(--flux-ctx); stroke-dasharray: 7 4; }
+.flux--outil.actif .flux-trait { stroke: var(--flux-outil); }
+.flux--stdio.actif .flux-trait { stroke: var(--flux-stdio); stroke-dasharray: 12 4; }
+.flux--http.actif .flux-trait  { stroke: var(--flux-http); stroke-dasharray: 9 3 2 3; }
+.flux--ssh.actif .flux-trait   { stroke: var(--flux-ssh); stroke-dasharray: 8 3 2 3 2 3; }
+.flux--data.actif .flux-trait  { stroke: var(--flux-data); stroke-dasharray: 0.1 4.5; stroke-linecap: round; stroke-width: 2.4; }
+.flux--git.actif .flux-trait   { stroke: var(--flux-git); stroke-width: 3; }
+.flux--cout.actif .flux-trait  { stroke: var(--flux-cout); stroke-dasharray: 2 2; }
+.flux--off.actif .flux-trait   { stroke: var(--flux-off); stroke-dasharray: 5 4; }
+.flux--evt .flux-perles   { stroke: var(--flux-evt); }
+.flux--ctx .flux-perles   { stroke: var(--flux-ctx); }
+.flux--outil .flux-perles { stroke: var(--flux-outil); }
+.flux--stdio .flux-perles { stroke: var(--flux-stdio); }
+.flux--http .flux-perles  { stroke: var(--flux-http); }
+.flux--ssh .flux-perles   { stroke: var(--flux-ssh); }
+.flux--data .flux-perles  { stroke: var(--flux-data); }
+.flux--git .flux-perles   { stroke: var(--flux-git); }
+.flux--cout .flux-perles  { stroke: var(--flux-cout); }
+.flux--off .flux-perles   { display: none !important; }
+
+/* Échantillons de la légende (mêmes motifs que les flux actifs) */
+.echantillon path { fill: none; stroke-width: 2; }
+.ech--evt path   { stroke: var(--flux-evt); stroke-width: 2.6; }
+.ech--ctx path   { stroke: var(--flux-ctx); stroke-dasharray: 7 4; }
+.ech--outil path { stroke: var(--flux-outil); }
+.ech--stdio path { stroke: var(--flux-stdio); stroke-dasharray: 12 4; }
+.ech--http path  { stroke: var(--flux-http); stroke-dasharray: 9 3 2 3; }
+.ech--ssh path   { stroke: var(--flux-ssh); stroke-dasharray: 8 3 2 3 2 3; }
+.ech--data path  { stroke: var(--flux-data); stroke-dasharray: 0.1 4.5; stroke-linecap: round; stroke-width: 2.4; }
+.ech--git path   { stroke: var(--flux-git); stroke-width: 3; }
+.ech--cout path  { stroke: var(--flux-cout); stroke-dasharray: 2 2; }
+.ech--off path   { stroke: var(--flux-off); stroke-dasharray: 5 4; }
+
+/* Étiquettes et badges des flux */
+.etiquette { display: none; pointer-events: none; }
+.etiquette rect { fill: var(--surface); stroke: var(--bord); }
+.etiquette text { fill: var(--encre); font-weight: 600; }
+.etiquette .etq-trait { stroke-width: 2.5; stroke-linecap: round; }
+.etiquette.visible, .carte.etiquettes-toutes .etiquette { display: inline; }
+.carte.a-focus .etiquette:not(.visible) { display: none; }
+.etiquette.sans-place { display: none !important; }
+.badge circle { fill: var(--surface); stroke-width: 1.3; }
+.badge--off circle { stroke: var(--critique); }
+.badge--off path { stroke: var(--critique); stroke-width: 1.5; stroke-linecap: round; }
+.badge--cout circle { stroke: var(--encre); }
+.badge--cout text { fill: var(--encre); font-weight: 700; }
+
+/* Mise en évidence d'un chemin */
+.carte.a-focus .noeud:not(.en-avant) { opacity: var(--estompe-noeud); }
+.carte.a-focus .flux:not(.actif) .flux-trait { opacity: var(--estompe-lien); }
+.carte.a-focus .badge:not(.en-avant) { opacity: .25; }
+.masque { display: none !important; }
+
+/* Jeton du parcours */
+.jeton .halo { fill: var(--accent); opacity: .18; }
+.jeton .coeur { fill: var(--surface); stroke: var(--accent); stroke-width: 3; }
+
+/* ——— Carte de droite : fiche et parcours ——— */
+.panneau-droit {
+  right: 88px; top: 112px; width: 420px; max-height: 850px;
+  overflow-y: auto;
+  padding: 22px 24px 22px;
+  scrollbar-width: thin;
+}
+.panneau-droit:focus { outline: none; }
+.fermer {
+  position: absolute; right: 14px; top: 14px; width: 30px; height: 30px;
+  border: 0; border-radius: 8px; background: var(--surface-2);
+  display: grid; place-items: center;
+}
+.fermer svg { width: 14px; height: 14px; stroke: var(--encre-2); stroke-width: 1.8; stroke-linecap: round; }
+.fermer:hover { background: #e9e8e3; }
+.micro { margin: 0; font-size: var(--t-micro); font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--encre-3); }
+.fiche-titre { margin: 8px 0 2px; font-size: var(--t-fiche-titre); font-weight: 650; letter-spacing: -0.02em; line-height: 1.1; padding-right: 30px; }
+.fiche-chiffre { margin: 0 0 12px; font-size: 16px; color: var(--encre-2); }
+.puces { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; }
+.puce { font-size: 12px; font-weight: 600; border-radius: 999px; padding: 3px 10px; background: var(--surface-2); color: var(--encre-2); display: inline-flex; align-items: center; gap: 6px; }
+.puce i { width: 7px; height: 7px; border-radius: 50%; background: var(--encre); display: inline-block; }
+.puce--panne i, .puce--pause i { background: var(--critique); }
+.puce--panne, .puce--pause { color: var(--critique); background: #fbeaea; }
+.puce--non-branche i, .puce--hors-perimetre i { background: transparent; border: 1.3px dashed var(--encre-3); }
+.rangs { margin: 0; border-top: 1px solid var(--filet); }
+.rang { display: grid; grid-template-columns: 104px 1fr; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--filet); font-size: 14px; line-height: 1.42; }
+.rang dt { color: var(--encre-3); font-size: 12px; font-weight: 600; padding-top: 2px; }
+.rang dd { margin: 0; color: var(--encre); }
+.note { margin: 14px 0 0; padding: 10px 12px; border-radius: 10px; background: #fff6e0; font-size: 13.5px; line-height: 1.42; color: #5c4400; }
+.preuve { margin-top: 16px; background: var(--surface-2); border-radius: 12px; padding: 12px 14px; }
+.preuve-tete { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; }
+.preuve pre { margin: 0; font: 12.5px/1.6 var(--police-mono); white-space: pre-wrap; word-break: break-word; color: var(--encre); }
+.preuve-note { margin: 8px 0 0; font-size: 12px; color: var(--encre-3); line-height: 1.4; }
+.connexions { list-style: none; margin: 16px 0 0; padding: 0; }
+.connexions li + li { border-top: 1px solid var(--filet); }
+.connexion { width: 100%; display: grid; grid-template-columns: 28px 1fr; gap: 10px; align-items: center; text-align: left; border: 0; background: none; padding: 8px 4px; font-size: 13.5px; border-radius: 8px; }
+.connexion:hover { background: var(--surface-2); }
+.connexion small { display: block; color: var(--encre-3); font-size: 12px; }
+
+/* Mesure (dans la fiche) */
+.mesure { margin-top: 16px; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--filet); }
+.mesure-barre { display: flex; gap: 2px; height: 10px; margin: 4px 0 12px; }
+.mesure-barre span { border-radius: 5px; min-width: 3px; }
+.mesure-barre .mesure-reste { background: #ebeae5; }
+.mesure-legende { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; font-size: 13px; }
+.mesure-legende li { display: grid; grid-template-columns: 10px 1fr auto; gap: 8px; align-items: center; }
+.mesure-legende i { width: 8px; height: 8px; border-radius: 2px; }
+.mesure-legende b { font-weight: 600; font-variant-numeric: tabular-nums; }
+.mesure-max i { background: #ebeae5; }
+.mesure-max span, .mesure-max b { color: var(--encre-3); font-weight: 500; }
+
+/* Parcours */
+.etape-num { display: flex; align-items: baseline; gap: 8px; margin: 14px 0 4px; }
+.etape-num b { font-size: 44px; font-weight: 650; letter-spacing: -0.03em; line-height: 1; font-variant-numeric: tabular-nums; }
+.etape-num span { font-size: 14px; color: var(--encre-3); }
+.etape-titre { margin: 4px 0 10px; font-size: var(--t-etape); font-weight: 650; letter-spacing: -0.015em; line-height: 1.15; }
+.etape-texte { margin: 0 0 14px; font-size: var(--t-corps); line-height: 1.5; color: var(--encre); }
+.progression { display: grid; grid-template-columns: repeat(12, 1fr); gap: 4px; margin: 16px 0 14px; }
+.progression button { height: 6px; border: 0; padding: 0; border-radius: 3px; background: #dddcd6; }
+.progression button.fait { background: #9a9993; }
+.progression button[aria-current="step"] { background: var(--accent); }
+.commandes-etape { display: flex; gap: 8px; align-items: center; }
+.bouton { height: 36px; border-radius: 10px; border: 1px solid var(--bord); background: var(--surface); padding: 0 14px; font-size: 13px; font-weight: 600; display: inline-flex; align-items: center; gap: 8px; }
+.bouton:hover { background: var(--surface-2); }
+.bouton svg { width: 14px; height: 14px; fill: currentColor; }
+.bouton--plein { background: var(--encre); color: #fff; border-color: var(--encre); }
+.bouton--plein:hover { background: #333; }
+.commandes-etape .etat { margin-left: auto; font-size: 12px; color: var(--encre-3); }
+
+@media (prefers-reduced-motion: reduce) {
+  .flux.actif .flux-perles { animation: none; }
+  .noeud, .flux-trait { transition: none; }
+}
+
+</style>
+</head>
+<body>
+  <!--
+    La scène est composée une fois pour toutes en 1920 × 1080,
+    puis mise à l'échelle de la fenêtre : même composition sur tout écran.
+  -->
+  <div id="scene" class="scene">
+
+    <!-- Carte : un seul SVG, construit par app.js à partir de data.js -->
+    <svg id="carte" class="carte" role="group" aria-label="Carte de l'architecture"></svg>
+
+    <!-- En-tête -->
+    <header class="entete">
+      <p class="surtitre"><span class="puce-ronde"></span><span id="surtitre"></span></p>
+      <h1 id="titre"></h1>
+      <p class="sous-ligne" id="sous-ligne"></p>
+    </header>
+
+    <!-- Recherche -->
+    <div class="recherche">
+      <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.5"/><path d="M13 13l4 4"/></svg>
+      <input id="recherche" type="search" placeholder="Trouver un composant" aria-label="Trouver un composant" autocomplete="off">
+      <kbd>/</kbd>
+    </div>
+
+    <!-- Panneau de gauche : couches et flux -->
+    <aside class="panneau panneau-gauche" aria-label="Couches et flux">
+      <div class="panneau-tete">
+        <h2 id="panneau-titre">Couches</h2>
+        <span class="compteur" id="panneau-compteur"></span>
+      </div>
+      <div class="segments" role="tablist">
+        <button type="button" role="tab" class="segment" data-onglet="couches" aria-selected="true">Couches</button>
+        <button type="button" role="tab" class="segment" data-onglet="flux" aria-selected="false">Flux</button>
+      </div>
+      <ul class="liste" id="liste-couches"></ul>
+      <ul class="liste" id="liste-flux" hidden></ul>
+      <div class="panneau-pied">
+        <span id="pied-compte"></span>
+        <button type="button" class="lien-texte" id="tout-afficher">Tout afficher</button>
+      </div>
+    </aside>
+
+    <!-- Barre d'outils verticale -->
+    <nav class="outils" aria-label="Outils">
+      <button type="button" id="btn-lecture" title="Parcours (espace)" aria-label="Lancer le parcours">
+        <svg viewBox="0 0 20 20" class="ic-lecture"><path d="M7 4.5v11l9-5.5z"/></svg>
+        <svg viewBox="0 0 20 20" class="ic-pause"><path d="M6 4.5h3v11H6zM11 4.5h3v11h-3z"/></svg>
+      </button>
+      <span class="outils-sep"></span>
+      <button type="button" id="btn-panneau" title="Couches et flux" aria-label="Afficher le panneau des couches et des flux" aria-pressed="false"><svg viewBox="0 0 20 20"><path d="M10 3.5l7 3.5-7 3.5-7-3.5z"/><path d="M3 10.5l7 3.5 7-3.5M3 14l7 3.5 7-3.5"/></svg></button>
+      <button type="button" id="btn-zoom-plus" title="Zoomer (+)" aria-label="Zoomer"><svg viewBox="0 0 20 20"><path d="M10 4v12M4 10h12"/></svg></button>
+      <button type="button" id="btn-zoom-moins" title="Dézoomer (−)" aria-label="Dézoomer"><svg viewBox="0 0 20 20"><path d="M4 10h12"/></svg></button>
+      <button type="button" id="btn-zoom-zero" title="Recentrer (0)" aria-label="Recentrer"><svg viewBox="0 0 20 20"><path d="M4 8V4h4M12 4h4v4M16 12v4h-4M8 16H4v-4"/></svg></button>
+      <span class="outils-sep"></span>
+      <button type="button" id="btn-etiquettes" title="Étiquettes des flux" aria-label="Afficher toutes les étiquettes" aria-pressed="false"><svg viewBox="0 0 20 20"><path d="M3.5 10.5l6.8 6.8 7-7V3.5h-6.8z"/><circle cx="13.6" cy="6.4" r="1.2"/></svg></button>
+      <button type="button" id="btn-export" title="Exporter en PNG" aria-label="Exporter en PNG"><svg viewBox="0 0 20 20"><path d="M10 3.5v9M6.2 9l3.8 3.8L13.8 9M4 16.5h12"/></svg></button>
+    </nav>
+
+    <!-- Carte de droite : fiche d'un composant ou étape du parcours -->
+    <aside id="carte-droite" class="panneau panneau-droit" hidden tabindex="-1" aria-live="polite"></aside>
+
+    <!-- Curseur d'éclatement -->
+    <div class="eclate panneau">
+      <div class="eclate-tete">
+        <span>Éclater l'architecture</span>
+        <span class="eclate-valeur" id="eclate-valeur">100 %</span>
+      </div>
+      <input type="range" id="eclate" min="0" max="100" value="100" aria-label="Éclater l'architecture">
+      <div class="eclate-bornes"><span>Un seul programme</span><span>Neuf couches</span></div>
+    </div>
+
+    <!-- Pied de scène -->
+    <footer class="pied">
+      <span><kbd>Espace</kbd> parcours</span>
+      <span><kbd>←</kbd><kbd>→</kbd> étapes</span>
+      <span><kbd>0</kbd> recentrer</span>
+      <span><kbd>Échap</kbd> fermer</span>
+    </footer>
+    <p class="source" id="source"></p>
+  </div>
+
+  <script>
+/*
+  DONNÉES DU DASHBOARD — seul fichier à modifier pour changer le contenu.
+
+  Tout ce qui suit le signe « = » est du JSON pur : guillemets doubles,
+  pas de virgule finale, pas de commentaire à l'intérieur.
+  Ce fichier est un .js (et non un .json) pour une seule raison : Chrome
+  interdit à une page ouverte par double-clic de lire un fichier .json voisin.
+
+  Source unique : architecture.md (dossier de passation, maj 15 octobre 2026).
+  Chaque bloc, lien et étape porte le numéro de section dont il vient.
+*/
+window.DONNEES = {
+  "meta": {
+    "titre": "Hermes Atlas",
+    "surtitre": "Architecture agentique",
+    "sousTitre": "Suivre un message de Telegram jusqu'à ses effets mesurables",
+    "source": "architecture.md, dossier de passation, mise à jour du 15 octobre 2026",
+    "sourceCourte": "architecture.md (15 octobre 2026)"
+  },
+
+  "monolithe": {
+    "surtitre": "Un seul programme",
+    "titre": "Hermes Agent v0.21.5",
+    "ligne": "un conteneur Docker chez Railway, région sfo, en continu",
+    "citation": "« parler, se souvenir, exécuter, et se réveiller tout seul »",
+    "source": "1"
+  },
+
+  "couches": [
+    { "id": "entrees",     "num": 1, "nom": "Entrées",          "nomLong": "Entrées : là où l'humain parle",                        "source": "6.1, 7.6",        "annexe": false },
+    { "id": "reception",   "num": 2, "nom": "Réception",        "nomLong": "Réception et assemblage du contexte",                  "source": "4, 6.1, 10.1",    "annexe": false },
+    { "id": "orchestre",   "num": 3, "nom": "Orchestrateur",    "nomLong": "Orchestrateur : la boucle qui décide",                 "source": "1, 4, 7.1",       "annexe": false },
+    { "id": "outils",      "num": 4, "nom": "Outils directs",   "nomLong": "Outils directs : ce que l'agent fait lui-même",        "source": "7.1",             "annexe": false },
+    { "id": "sousagents",  "num": 5, "nom": "Sous-agents",      "nomLong": "Sous-agents : le travail délégué",                     "source": "4",               "annexe": false },
+    { "id": "mcp",         "num": 6, "nom": "Connecteurs MCP",  "nomLong": "Connecteurs MCP : les serveurs d'outils externes",     "source": "7.2, 7.5, 9.4",   "annexe": false },
+    { "id": "memoire",     "num": 7, "nom": "Mémoire",          "nomLong": "Mémoire et connaissance",                              "source": "8, 10",           "annexe": false },
+    { "id": "deploiement", "num": 8, "nom": "Déploiement",      "nomLong": "Déploiement et souveraineté : où ça tourne, qui répare", "source": "2, 11, 12, 13.4", "annexe": true },
+    { "id": "sorties",     "num": 9, "nom": "Sorties",          "nomLong": "Sorties : les effets mesurables",                      "source": "6.1, 9.1, 9.4",   "annexe": false }
+  ],
+
+  "statuts": {
+    "actif":          { "nom": "Actif" },
+    "non-branche":    { "nom": "Non branché" },
+    "panne":          { "nom": "En panne" },
+    "pause":          { "nom": "En pause" },
+    "hors-perimetre": { "nom": "Hors périmètre" }
+  },
+
+  "typesLiens": [
+    { "id": "evt",   "nom": "Message entrant",     "description": "Événement Telegram : message, mémo vocal ou réponse. Trait plein épais et animé, sens unique.", "fleche": "fin",    "anime": true },
+    { "id": "ctx",   "nom": "Contexte injecté",    "description": "Fichier lu pour construire la requête envoyée au modèle. Tirets fins, flèche vers l'orchestrateur.", "fleche": "fin" },
+    { "id": "outil", "nom": "Appel d'outil",       "description": "Appel interne puis résultat. Trait plein fin, double flèche.", "fleche": "double" },
+    { "id": "stdio", "nom": "MCP stdio local",     "description": "Transport MCP par processus local (entrée et sortie standard). Tirets longs.", "fleche": "double" },
+    { "id": "http",  "nom": "MCP HTTP + OAuth",    "description": "Transport MCP vers un serveur distant, authentifié par OAuth. Tiret-point.", "fleche": "double" },
+    { "id": "ssh",   "nom": "MCP SSH tailnet",     "description": "Transport MCP qui traverse le tailnet en SSH jusqu'au Mac. Tiret-point-point.", "fleche": "double" },
+    { "id": "data",  "nom": "Lecture / écriture",  "description": "Lecture ou écriture de données : volume, base SQLite, Drive. Pointillé fin.", "fleche": "fin" },
+    { "id": "git",   "nom": "Git · déploiement",   "description": "push, reconstruction de l'image, redéploiement. Double rail.", "fleche": "fin" },
+    { "id": "cout",  "nom": "Coût · latence",      "description": "Lien qui porte une valeur chiffrée (coût, durée). Étiquette toujours visible.", "fleche": "fin" },
+    { "id": "off",   "nom": "Hors service",        "description": "Flux en panne, en pause ou non branché. Rouge discontinu, marqué d'une croix.", "fleche": "fin" }
+  ],
+
+  "blocs": [
+    {
+      "id": "tg", "couche": "entrees", "titre": "Telegram", "chiffre": "@eiryn_bot", "statut": "actif",
+      "machine": "Service distant Telegram",
+      "fait": "Seule plateforme active. Deux chats autorisés : 8333583307 (le canal personnel « Home ») et -1003930058551 (le groupe de travail). Le groupe porte des sujets : 121 travail courant, 8227 digestion, 1063 facturation, 16965 livraison du rafraîchissement des jetons Google.",
+      "entre": "Les messages de Guillaume, en texte ou en voix.",
+      "sort": "Des mises à jour récupérées par la passerelle en interrogation continue (polling, pas de webhook).",
+      "cout": "Non précisé dans le document.",
+      "casse": "Plus aucune entrée : l'agent ne reçoit plus rien. Un seul agent peut utiliser le jeton du bot à la fois (13.3).",
+      "source": "6.1",
+      "preuve": { "titre": "Configuration Telegram", "source": "6.1",
+        "lignes": ["telegram.allowed_chats = 8333583307, -1003930058551", "fil 8227 → /opt/data/profiles/digest/SOUL.md", "fil 1063 → /opt/data/profiles/facture/SOUL.md"] }
+    },
+    {
+      "id": "memo", "couche": "entrees", "titre": "Mémo vocal", "chiffre": "fil 121", "statut": "actif",
+      "machine": "Téléphone de Guillaume, application Telegram",
+      "fait": "Message vocal envoyé dans un fil Telegram. L'échange vocal fonctionne dans les deux sens, et rien ne sort du système.",
+      "entre": "La voix de Guillaume.",
+      "sort": "Un fichier audio transmis à la passerelle.",
+      "cout": "La transcription locale est gratuite (7.6).",
+      "casse": "Rien de bloquant : le texte reste possible.",
+      "source": "7.6",
+      "preuve": { "titre": "Commandes du mode vocal", "source": "7.6",
+        "lignes": ["/voice on", "/voice tts", "/voice off", "/voice status"] }
+    },
+    {
+      "id": "desk", "couche": "entrees", "titre": "Client de bureau", "chiffre": "hors périmètre", "statut": "hors-perimetre", "annexe": true,
+      "machine": "Poste de travail",
+      "fait": "Le plein duplex vocal reste réservé au client de bureau. Il ne fait pas partie du parcours étudié ici.",
+      "entre": "Non précisé dans le document.",
+      "sort": "Non précisé dans le document.",
+      "cout": "Mode vocal du client de bureau : 0,05 dollar la minute.",
+      "casse": "Rien pour le parcours Telegram.",
+      "source": "7.6",
+      "preuve": { "titre": "Comparaison des coûts vocaux", "source": "7.6",
+        "lignes": ["Transcription locale : gratuite", "whisper-1 chez OpenAI : 0,006 $ / minute", "Mode vocal du client de bureau : 0,05 $ / minute"] }
+    },
+    {
+      "id": "wa", "couche": "entrees", "titre": "WhatsApp", "chiffre": "non appairé", "statut": "non-branche",
+      "machine": "Volume /opt/data (pont Node.js « Baileys »)",
+      "fait": "Adaptateur présent dans l'image, pont « Baileys » installé sur le volume. Aucun appairage : pas de fichier d'identifiants, pas de processus en écoute.",
+      "entre": "Rien aujourd'hui.",
+      "sort": "Rien aujourd'hui.",
+      "cout": "Mode bot chiffré le 28 septembre 2026 : environ 1 dollar par mois d'infrastructure, puis 0,031 dollar par message entrant.",
+      "casse": "Rien : la plateforme n'est pas branchée. Tout ce qui s'appuie dessus reste théorique (15).",
+      "source": "6.3",
+      "preuve": { "titre": "État du pont WhatsApp", "source": "6.3",
+        "lignes": ["/opt/data/scripts/whatsapp-bridge/bridge.js (28 101 octets)", "node_modules : 57,9 Mo, installés le 28 septembre 2026", "État : aucun appairage"] }
+    },
+
+    {
+      "id": "gw", "couche": "reception", "titre": "Passerelle", "chiffre": "polling · sfo", "statut": "actif",
+      "machine": "Conteneur Docker chez Railway, région sfo (San Francisco)",
+      "fait": "Le programme « hermes gateway run ». Il reçoit les messages Telegram et sert tous les profils dans un seul processus. Il refuse de tourner en root : il tourne sous l'utilisateur hermes (uid 10000).",
+      "entre": "Messages texte et fichiers audio venus de Telegram.",
+      "sort": "La demande vers l'orchestrateur ; l'audio vers la transcription.",
+      "cout": "Non précisé dans le document.",
+      "casse": "L'agent devient muet. Le 21 septembre 2026, une valeur non résolue dans .env a vidé l'autorisation Telegram : cinq heures de panne (3.1).",
+      "source": "2.1, 3.1, 6.1",
+      "preuve": { "titre": "Démarrage du service", "source": "2.1, 3",
+        "lignes": ["start_main.py --apply  puis  exec hermes gateway run", "image nousresearch/hermes-agent:v2026.9.24 (Hermes Agent v0.21.5)", "gateway.multiplex_profiles = vrai"] }
+    },
+    {
+      "id": "stt", "couche": "reception", "titre": "Transcription", "chiffre": "large-v3 · fr", "statut": "actif",
+      "machine": "Conteneur Railway (sfo), modèle gardé en cache sur le volume",
+      "fait": "Reconnaissance vocale locale : moteur faster-whisper, modèle large-v3, langue forcée en français.",
+      "entre": "Le fichier audio du mémo.",
+      "sort": "Le texte transcrit, en français.",
+      "cout": "Gratuit, car local. Mesure publiée : un mémo de 8 secondes se transcrit en une dizaine de secondes, chargement du modèle compris.",
+      "casse": "Les mémos vocaux ne sont plus compris ; le texte reste possible. Limite connue : les noms propres dérivent (Tour des Possibles, Magnetic, Geneva Lux).",
+      "source": "7.6",
+      "preuve": { "titre": "Réglage et mesure", "source": "4, 7.6",
+        "lignes": ["stt : faster-whisper · large-v3 · langue fr", "modèle : 3,1 Go dans /opt/data/.cache/huggingface/", "mesure : mémo de 8 s → une dizaine de secondes"] }
+    },
+    {
+      "id": "soul", "couche": "reception", "titre": "config/soul.md", "chiffre": "voix et règles", "statut": "actif",
+      "machine": "Volume /opt/data, dans le vault Git",
+      "fait": "Le fichier qui porte la voix de l'agent et ses règles de rédaction.",
+      "entre": "Lu depuis le vault.",
+      "sort": "Injecté dans la requête envoyée au modèle.",
+      "cout": "Non précisé dans le document.",
+      "casse": "L'agent perd sa voix et ses règles d'écriture.",
+      "source": "10.1, 16",
+      "preuve": { "titre": "Règle de rédaction du 12 octobre 2026", "source": "16",
+        "lignes": ["Proscrites de tout texte produit :", "· l'antithèse", "· la règle de trois", "· la tournure « ni… ni… mais… »"],
+        "note": "Le document source ne cite pas le contenu de soul.md. Cette règle vient de l'arbitrage rédactionnel consigné en section 16." }
+    },
+    {
+      "id": "mem", "couche": "reception", "titre": "Mémoire injectée", "chiffre": "MEMORY · USER", "statut": "actif",
+      "mesure": { "titre": "Remplissage de la mémoire injectée (28 septembre 2026)", "source": "8", "unite": "%", "max": 100, "segments": [ { "l": "plein", "v": 99 } ] },
+      "machine": "Volume /opt/data/memories/",
+      "fait": "MEMORY.md (mémoire de l'agent) et USER.md (profil de Guillaume), rechargés à chaque tour, avant même la première question. Au 28 septembre 2026, la mémoire est pleine à 99 % : toute addition exige de condenser.",
+      "entre": "Les écritures de l'outil mémoire.",
+      "sort": "Une injection dans chaque tour de conversation.",
+      "cout": "Non précisé dans le document.",
+      "casse": "L'agent oublie le profil de Guillaume et ses faits durables.",
+      "source": "8, 4",
+      "preuve": { "titre": "Plafonds", "source": "4, 8",
+        "lignes": ["memory_char_limit = 5000", "memory.user_char_limit = 3000", "miroir versionné : vault 03_agent/memories/"] }
+    },
+    {
+      "id": "persona", "couche": "reception", "titre": "Personas par fil", "chiffre": "fils 8227 · 1063", "statut": "actif",
+      "machine": "Volume /opt/data/profiles/",
+      "fait": "telegram.channel_prompts : le fil 8227 charge la persona Digest (curateur de connaissance), le fil 1063 la persona Facture (factures freelance).",
+      "entre": "L'identifiant du fil Telegram.",
+      "sort": "Le fichier d'âme du profil, injecté dans la requête.",
+      "cout": "Non précisé dans le document.",
+      "casse": "Les fils de digestion et de facturation répondent avec la voix par défaut. Les profils ne sont pas dans l'archive Drive (12.2).",
+      "source": "6.1, 6.2",
+      "preuve": { "titre": "Profils", "source": "6.2",
+        "lignes": ["digest : 9,0 Mo", "facture : 508 Ko", "coquilles vides : head, magnetic, pdn, hermes"] }
+    },
+    {
+      "id": "skills", "couche": "reception", "titre": "Skills", "chiffre": "159 actives", "statut": "actif",
+      "mesure": { "titre": "Origine des 159 skills actives", "source": "8", "unite": "skills", "segments": [ { "l": "locales", "v": 148 }, { "l": "fournies par l'image", "v": 11 } ] },
+      "machine": "Volume : vault/skills/, atteint par le lien /opt/data/skills",
+      "fait": "Mémoire procédurale. Un skill est un mode d'emploi que l'agent écrit après avoir résolu un problème, et qui se recharge quand le sujet revient.",
+      "entre": "Le sujet de la demande.",
+      "sort": "Le skill pertinent, ajouté au contexte.",
+      "cout": "Non précisé dans le document.",
+      "casse": "Sans le lien symbolique skills/ → vault/skills/, les 148 skills locales n'existent plus pour l'agent (13.2).",
+      "source": "8, 10.3",
+      "preuve": { "titre": "Inventaire", "source": "8",
+        "lignes": ["159 actives : 148 locales + 11 fournies par l'image", "39 dossiers de catégorie, 495 fichiers markdown", "/opt/data/skills → /opt/data/vault/skills"] }
+    },
+    {
+      "id": "hist", "couche": "reception", "titre": "Historique", "chiffre": "9 597 sessions", "statut": "actif",
+      "machine": "Conteneur Railway, lecture de state.db sur le volume",
+      "fait": "Retrouve un échange précis du passé grâce à l'index plein texte de la base des sessions.",
+      "entre": "Une requête de recherche.",
+      "sort": "Des extraits d'échanges passés.",
+      "cout": "Non précisé dans le document.",
+      "casse": "L'agent ne retrouve plus les conversations passées.",
+      "source": "8",
+      "preuve": { "titre": "Base des sessions", "source": "4, 8",
+        "lignes": ["index plein texte : messages_fts", "9 597 sessions · 301 927 messages", "session_reset.mode = none"] }
+    },
+
+    {
+      "id": "loop", "couche": "orchestre", "titre": "Boucle principale", "chiffre": "deepseek-flash", "statut": "actif", "pivot": true,
+      "mesure": { "titre": "Jetons traités sur 30 jours, par modèle", "source": "5.3", "unite": "M jetons", "segments": [ { "l": "deepseek-flash", "v": 1004.5 }, { "l": "claude-haiku-4-5", "v": 30.6 }, { "l": "claude-opus-5-5", "v": 29.7 } ] },
+      "machine": "Conteneur Railway ; modèle appelé chez DeepSeek (https://api.deepseek.com)",
+      "fait": "Lit la demande, décide d'appeler un outil, de déléguer ou de répondre. Deux replis en cascade si le fournisseur est indisponible.",
+      "entre": "La requête assemblée : message, soul.md, mémoire, skills, historique.",
+      "sort": "Des appels d'outils, des délégations, une réponse.",
+      "cout": "Sur 30 jours (16 septembre → 14 octobre 2026) : 1,064 milliard de jetons traités, coût estimé 53,61 dollars. deepseek-flash : 1 004,5 M jetons sur 57 sessions.",
+      "casse": "Plus de raisonnement sur le modèle principal : bascule sur claude-sonnet-4-6, puis sur MiniMax-M3.",
+      "source": "4, 5.1, 5.3",
+      "preuve": { "titre": "Configuration du modèle", "source": "4",
+        "lignes": ["model.default = deepseek-flash", "fallback_providers = claude-sonnet-4-6, MiniMax-M3", "agent.reasoning_effort = medium"] }
+    },
+    {
+      "id": "turns", "couche": "orchestre", "titre": "Plafond de tours", "chiffre": "1 000 tours", "statut": "actif",
+      "machine": "Conteneur Railway, réglage dans /opt/data/config.yaml",
+      "fait": "Nombre maximal de tours pour une boucle d'agent.",
+      "entre": "Non précisé dans le document.",
+      "sort": "Non précisé dans le document.",
+      "cout": "Non précisé dans le document.",
+      "casse": "Non précisé dans le document.",
+      "source": "4",
+      "preuve": { "titre": "Réglage", "source": "4",
+        "lignes": ["agent.max_turns = 1000", "agent.tool_use_enforcement = auto"] }
+    },
+    {
+      "id": "comp", "couche": "orchestre", "titre": "Compression", "chiffre": "0,50 → 0,20", "statut": "actif",
+      "machine": "Conteneur Railway ; modèle openai/gpt-6-luna via OpenRouter",
+      "fait": "Compresse le contexte quand il atteint la moitié de la fenêtre, vers 20 %, en protégeant les 3 premiers et les 20 derniers messages.",
+      "entre": "Le contexte de la conversation.",
+      "sort": "Un contexte compressé.",
+      "cout": "openai/gpt-6-luna : 0,10 dollar par million de jetons en entrée, 0,50 en sortie, 0,01 en lecture de cache. Repli : claude-haiku-4-5.",
+      "casse": "Non précisé dans le document.",
+      "source": "4, 5.1",
+      "preuve": { "titre": "Réglages", "source": "4",
+        "lignes": ["compression.threshold = 0,50", "compression.target_ratio = 0,20", "protect_first_n = 3 · protect_last_n = 20"] }
+    },
+    {
+      "id": "ckpt", "couche": "orchestre", "titre": "Instantanés", "chiffre": "476 / 500 Mo", "statut": "actif",
+      "mesure": { "titre": "Occupation des instantanés", "source": "2.2, 4", "unite": "Mo", "max": 500, "segments": [ { "l": "occupé", "v": 476 } ] },
+      "machine": "Volume /opt/data/checkpoints/",
+      "fait": "Instantané d'un fichier, pris par l'agent avant chaque modification. Sert à revenir en arrière.",
+      "entre": "Le fichier avant modification.",
+      "sort": "Une copie datée, conservée sept jours.",
+      "cout": "476 Mo occupés sur un plafond de 500 Mo : la marge est mince (15).",
+      "casse": "Plus de retour en arrière possible sur les fichiers modifiés (13.1).",
+      "source": "2.2, 4, 15",
+      "preuve": { "titre": "Réglages et occupation", "source": "4",
+        "lignes": ["checkpoints.max_snapshots = 20", "retention_days = 7 · min_interval_hours = 24", "occupé : 476 Mo sur 500 Mo au 15 octobre 2026"] }
+    },
+    {
+      "id": "curator", "couche": "orchestre", "titre": "Conservateur", "chiffre": "toutes les 168 h", "statut": "actif",
+      "machine": "Conteneur Railway",
+      "fait": "Entretient les skills créés par l'agent : archive après 90 jours d'inactivité sans jamais supprimer, sauvegarde tar.gz avant chaque passe. Ne touche pas aux skills écrits par Guillaume.",
+      "entre": "Les skills créés par l'agent.",
+      "sort": "Des skills archivés.",
+      "cout": "Non précisé dans le document.",
+      "casse": "Non précisé dans le document.",
+      "source": "4, 8",
+      "preuve": { "titre": "Réglages", "source": "4",
+        "lignes": ["curator.enabled = vrai", "une passe toutes les 168 heures", "archivage après 90 jours"] }
+    },
+
+    {
+      "id": "t_term", "couche": "outils", "titre": "Terminal · fichiers", "chiffre": "+ exécution de code", "statut": "actif",
+      "machine": "Conteneur Railway (Debian 13, Python 3.13.5, Node.js v26.5.1)",
+      "fait": "Commandes shell, lecture et écriture de fichiers, exécution de code. Les outils de fichier refusent d'écrire dans le vault : toute écriture y passe par le terminal.",
+      "entre": "Une commande de l'orchestrateur ou d'un sous-agent.",
+      "sort": "La sortie de la commande, filtrée de ses secrets.",
+      "cout": "Sortie plafonnée à 50 000 octets, 2 000 lignes.",
+      "casse": "L'agent ne peut plus agir sur le système ni écrire dans le vault.",
+      "source": "7.1, 4, 15",
+      "preuve": { "titre": "Garde-fous", "source": "4",
+        "lignes": ["tool_output : 50 000 octets, 2 000 lignes", "security.redact_secrets = vrai", "security.tirith_enabled = vrai (fail open)"] }
+    },
+    {
+      "id": "t_web", "couche": "outils", "titre": "Web · navigateur", "chiffre": "+ vision", "statut": "actif",
+      "machine": "Conteneur Railway (Playwright) ; vision chez Anthropic (claude-haiku-4-5)",
+      "fait": "Recherche et extraction web, navigateur automatisé, lecture d'images par un modèle auxiliaire.",
+      "entre": "Une requête, une adresse, une image.",
+      "sort": "Pages, extraits, description d'image.",
+      "cout": "30 secondes par commande de navigateur.",
+      "casse": "Plus de recherche web interne ; Firecrawl reste disponible en MCP.",
+      "source": "7.1, 7.4, 5.1",
+      "preuve": { "titre": "Délais du navigateur", "source": "4",
+        "lignes": ["browser : moteur auto, 30 s par commande", "inactivité 120 s · dialogues 300 s", "allow_private_urls = faux"] }
+    },
+    {
+      "id": "t_tts", "couche": "outils", "titre": "Synthèse vocale", "chiffre": "fr-FR-DeniseNeural", "statut": "actif",
+      "machine": "Conteneur Railway (moteur edge)",
+      "fait": "Lit la réponse à voix haute. La voix anglaise d'origine rendait le français incompréhensible et dégradait la reconnaissance des mémos suivants.",
+      "entre": "Le texte de la réponse.",
+      "sort": "Un message vocal pour Telegram.",
+      "cout": "Non précisé dans le document.",
+      "casse": "Les réponses reviennent en texte seulement.",
+      "source": "7.6",
+      "preuve": { "titre": "Réglage", "source": "4, 7.6",
+        "lignes": ["tts : edge", "voix : fr-FR-DeniseNeural", "commande Telegram : /voice tts"] }
+    },
+    {
+      "id": "t_mem", "couche": "outils", "titre": "Mémoire · sessions", "chiffre": "skills · à faire · cron", "statut": "actif",
+      "machine": "Conteneur Railway ; données sur le volume",
+      "fait": "Outils de mémoire, recherche dans les sessions, skills, tâches à faire, tâches planifiées et clarification.",
+      "entre": "Une requête de l'orchestrateur ou d'un sous-agent.",
+      "sort": "Faits, extraits, écritures en mémoire.",
+      "cout": "Non précisé dans le document.",
+      "casse": "L'agent ne se souvient plus et ne retrouve plus rien.",
+      "source": "7.1, 8",
+      "preuve": { "titre": "Jeux d'outils", "source": "4, 7.1",
+        "lignes": ["toolsets = hermes-cli", "agent.disabled_toolsets = vide", "aucun jeu d'outils désactivé"] }
+    },
+
+    {
+      "id": "deleg", "couche": "sousagents", "titre": "delegate_task", "chiffre": "profondeur 1", "statut": "actif",
+      "machine": "Conteneur Railway",
+      "fait": "Ouvre un contexte isolé pour un sous-agent. Orchestrateur activé, un seul niveau de délégation : un sous-agent ne délègue pas à son tour.",
+      "entre": "Une tâche confiée par l'orchestrateur.",
+      "sort": "Un sous-agent lancé, puis son résultat.",
+      "cout": "Délai par enfant : 600 secondes.",
+      "casse": "L'agent principal fait tout lui-même, en série.",
+      "source": "4",
+      "preuve": { "titre": "Réglages de délégation", "source": "4",
+        "lignes": ["delegation.provider = anthropic", "max_spawn_depth = 1", "délai par enfant : 600 s"] }
+    },
+    {
+      "id": "sub", "couche": "sousagents", "titre": "Sous-agents", "chiffre": "3 en parallèle", "statut": "actif",
+      "mesure": { "titre": "Sous-agents en parallèle", "source": "4", "unite": "sous-agents au plus", "max": 3, "segments": [ { "l": "plafond", "v": 3 } ] },
+      "machine": "Conteneur Railway ; modèle claude-haiku-4-5 chez Anthropic",
+      "fait": "Contextes enfants qui travaillent en parallèle, trois au plus.",
+      "entre": "Une tâche bornée.",
+      "sort": "Un résultat remonté à l'orchestrateur.",
+      "cout": "Sur 30 jours : 31 sessions de sous-agents. claude-haiku-4-5 : 30,6 M jetons sur 32 sessions.",
+      "casse": "Plus de travail en parallèle.",
+      "source": "4, 5.3",
+      "preuve": { "titre": "Réglages", "source": "4, 5.3",
+        "lignes": ["delegation.model = claude-haiku-4-5", "max_concurrent_children = 3", "31 sessions de sous-agents sur 30 jours"] }
+    },
+
+    {
+      "id": "cat", "couche": "mcp", "titre": "Catalogue MCP", "chiffre": "111 outils", "statut": "actif", "pivot": true,
+      "mesure": { "titre": "Catalogue des 111 outils MCP", "source": "7.1", "unite": "outils", "segments": [ { "l": "Firecrawl", "v": 27 }, { "l": "Figma", "v": 44 }, { "l": "Blender", "v": 40 } ] },
+      "machine": "Conteneur Railway",
+      "fait": "Les outils MCP ne sont pas chargés d'office : l'agent les cherche à la demande. C'est ce qui permet de garder trois serveurs branchés sans noyer le contexte.",
+      "entre": "Une recherche d'outil.",
+      "sort": "L'outil MCP chargé, puis son résultat.",
+      "cout": "Seuil de chargement : 10 % du contexte.",
+      "casse": "Les trois serveurs MCP deviennent inaccessibles.",
+      "source": "4, 7.1",
+      "preuve": { "titre": "Recherche d'outils", "source": "4, 7.1",
+        "lignes": ["tools.tool_search = auto, seuil 10 %", "27 Firecrawl + 44 Figma + 40 Blender = 111", "rechargement d'un serveur : confirmation demandée"] }
+    },
+    {
+      "id": "fc", "couche": "mcp", "titre": "Firecrawl", "chiffre": "27 outils · local", "statut": "actif",
+      "machine": "Conteneur Railway (processus npx), service Firecrawl distant",
+      "fait": "Moteur de recherche et de collecte web.",
+      "entre": "Une requête de recherche ou une adresse.",
+      "sort": "Pages collectées et extraites.",
+      "cout": "Non précisé dans le document.",
+      "casse": "Plus de collecte web en MCP. La clé FIRECRAWL_API_KEY n'est pas reconstruite au démarrage (15).",
+      "source": "7.2",
+      "preuve": { "titre": "Serveur MCP", "source": "4, 7.2",
+        "lignes": ["commande : npx firecrawl-mcp", "clé : FIRECRAWL_API_KEY", "27 outils, tous activés"] }
+    },
+    {
+      "id": "fig", "couche": "mcp", "titre": "Figma", "chiffre": "44 outils · distant", "statut": "actif",
+      "machine": "Service distant https://mcp.figma.com/mcp",
+      "fait": "Lecture des fichiers et des composants, capture d'un cadre, export d'images et de vidéos, création de diagrammes, écriture dans un fichier Figma.",
+      "entre": "Une commande MCP authentifiée.",
+      "sort": "Composants lus, images exportées, fichier modifié.",
+      "cout": "Non précisé dans le document.",
+      "casse": "Plus de lecture ni d'écriture de maquettes. Après perte du volume, l'OAuth est à refaire (13.2).",
+      "source": "7.2",
+      "preuve": { "titre": "Serveur MCP distant", "source": "7.2",
+        "lignes": ["https://mcp.figma.com/mcp", "authentification : OAuth", "jetons : /opt/data/mcp-tokens/figma.json"] }
+    },
+    {
+      "id": "bl", "couche": "mcp", "titre": "Blender", "chiffre": "40 outils · Mac", "statut": "actif",
+      "machine": "Mac de Guillaume : macbook-air-de-guillaume (100.106.146.95)",
+      "fait": "Lecture de scène, création d'objets, matériaux, rendu, imports (Polyhaven, Poly Pizza, Sketchfab), génération par Hyper3D, Tripo ou Hunyuan3D, export de scène.",
+      "entre": "Une commande MCP arrivée par SSH à travers le tailnet.",
+      "sort": "Un résultat ou un rendu, renvoyé dans la session.",
+      "cout": "Non précisé dans le document.",
+      "casse": "Le pont ne se refait pas sans mac_blender_mcp.env et la clé SSH id_hermes_mac, sauvegardés nulle part (12.2). Côté Mac : Tailscale actif, extension Blender lancée, SSH distant autorisé.",
+      "note": "Un rendu Blender produit une image. La section 9.4 confie toute génération de média à Dadaland ; le document ne tranche pas ce cas. Point à discuter en cours.",
+      "source": "7.2, 7.5",
+      "preuve": { "titre": "Côté Mac", "source": "7.5",
+        "lignes": ["extension Blender : 127.0.0.1:9876", "uvx mcp-for-blender --host 127.0.0.1 --port 9876", "diagnostic : MAC_MCP_DIAG=1 bash mac_blender_mcp.sh"] }
+    },
+    {
+      "id": "dada", "couche": "mcp", "titre": "Dadaland", "chiffre": "annoncé, non branché", "statut": "non-branche",
+      "machine": "Outil du studio, hors du système",
+      "fait": "Guillaume confie toute génération d'images et de vidéos à Dadaland. L'accès MCP est annoncé pour octobre 2026 ; il deviendra le quatrième serveur MCP.",
+      "entre": "Rien aujourd'hui.",
+      "sort": "Rien aujourd'hui.",
+      "cout": "Non précisé dans le document.",
+      "casse": "Aujourd'hui, une demande d'image se solde par un prompt remis à Guillaume (15).",
+      "source": "9.4, 15",
+      "preuve": { "titre": "Règle en vigueur", "source": "9.4",
+        "lignes": ["ne produire aucun média par un autre canal", "livrer un prompt quand une image est demandée"] }
+    },
+
+    {
+      "id": "vault", "couche": "memoire", "titre": "Vault Git", "chiffre": "1 258 notes", "statut": "actif",
+      "machine": "Volume /opt/data/vault (132 Mo), poussé sur GitHub",
+      "fait": "Le second brain en markdown : 5 catégories, 29 univers, une constitution écrite. Tout entre par inbox/, l'agent trie après digestion.",
+      "entre": "Écritures par le terminal, puis commit.",
+      "sort": "Notes, soul.md, skills.",
+      "cout": "Non précisé dans le document.",
+      "casse": "Perte de la connaissance digérée et des skills, qui vivent dans le vault.",
+      "source": "10, 2.3",
+      "preuve": { "titre": "Volumétrie", "source": "10.3",
+        "lignes": ["1 530 fichiers suivis · 589 commits depuis le 6 août 2026", "1 258 notes markdown hors skills", "règle : vault_git.py pull avant lecture, push après écriture"] }
+    },
+    {
+      "id": "statedb", "couche": "memoire", "titre": "state.db", "chiffre": "4,6 Go", "statut": "actif",
+      "mesure": { "titre": "Part de state.db dans le volume occupé", "source": "1", "unite": "Go", "max": 30, "segments": [ { "l": "state.db", "v": 4.6 }, { "l": "caches de digestion", "v": 5.9 } ] },
+      "machine": "Volume /opt/data/state.db",
+      "fait": "Base SQLite des sessions : la mémoire brute, celle qui retrouve un échange d'il y a trois mois.",
+      "entre": "Chaque message de chaque session.",
+      "sort": "Recherches plein texte.",
+      "cout": "Non précisé dans le document.",
+      "casse": "Perte de l'historique des conversations. Elle revient avec l'archive Drive (13.2).",
+      "source": "8, 2.2",
+      "preuve": { "titre": "Contenu", "source": "2.2, 8",
+        "lignes": ["41 tables · 9 597 sessions · 301 927 messages", "state.db-wal : 12 Mo", "contrôle : pragma quick_check, en lecture seule"] }
+    },
+    {
+      "id": "holo", "couche": "memoire", "titre": "Mémoire holographique", "chiffre": "memory_store.db", "statut": "actif",
+      "machine": "Volume /opt/data/memory_store.db (64 Ko)",
+      "fait": "Faits résolus par entité avec un score de confiance ; répond à des questions composées. Indépendante de la mémoire injectée.",
+      "entre": "Faits écrits par l'outil mémoire.",
+      "sort": "Réponses à des questions composées.",
+      "cout": "Non précisé dans le document.",
+      "casse": "Non précisé dans le document.",
+      "source": "8, 4",
+      "preuve": { "titre": "Réglages", "source": "4, 8",
+        "lignes": ["memory.provider = holographic", "en service depuis le 22 septembre 2026", "memory.flush_min_turns = 6"] }
+    },
+    {
+      "id": "drive", "couche": "memoire", "titre": "Google Drive", "chiffre": "11 HERMES", "statut": "actif",
+      "machine": "Service distant Google, compte professionnel de Guillaume",
+      "fait": "Dépôt des sauvegardes, matière première professionnelle (01 WORK), et miroir Obsidian du vault, lisible sans l'agent.",
+      "entre": "Archives nocturnes, copies de configuration, miroir Obsidian.",
+      "sort": "Matière première, lue par la persona Digest.",
+      "cout": "Non précisé dans le document.",
+      "casse": "Plus de sauvegarde hors du volume.",
+      "source": "2.4, 11, 12.1",
+      "preuve": { "titre": "Dossiers de 11 HERMES", "source": "2.4, 12.1",
+        "lignes": ["02 SNAPSHOTS COMPLETS : 30 archives conservées", "01 CONFIGS INFRASTRUCTURE : config.yaml, 11 772 octets", "04 OBSIDIAN : miroir du vault, 8 sous-dossiers"] }
+    },
+
+    {
+      "id": "railway", "couche": "deploiement", "titre": "Railway", "chiffre": "volume 46 Go", "statut": "actif",
+      "mesure": { "titre": "Volume /opt/data", "source": "1, 2.1", "unite": "Go", "max": 46, "segments": [ { "l": "occupé", "v": 30 } ] },
+      "machine": "Hébergeur Railway, région sfo (San Francisco)",
+      "fait": "Projet zesty-elegance, service hermes-railway, environnement production. Le volume hermes-railway-volume, monté sur /opt/data, survit aux redéploiements.",
+      "entre": "L'image reconstruite à chaque push.",
+      "sort": "Le conteneur en marche.",
+      "cout": "Non précisé dans le document.",
+      "casse": "Tout s'arrête. Reprise : section 13.",
+      "source": "2.1, 13.5",
+      "preuve": { "titre": "Relevé Railway", "source": "1, 2.1, 13.5",
+        "lignes": ["volume : 46 Go alloués, 30 Go occupés", "dernier déploiement : 761c3e6b, 2 octobre 2026", "sauvegarde de volume : 08 h 14 UTC, 6 jours"] }
+    },
+    {
+      "id": "gh_rail", "couche": "deploiement", "titre": "hermes-railway", "chiffre": "4 fichiers", "statut": "actif",
+      "machine": "GitHub, dépôt privé ghelleu/hermes-railway",
+      "fait": "Dockerfile, config.yaml, railway.json, README.md. Chaque git push sur main reconstruit l'image et redéploie. Le config.yaml du dépôt n'est copié qu'en graine : le pousser ne change rien au conteneur qui tourne.",
+      "entre": "Un git push sur main.",
+      "sort": "Une reconstruction complète de l'image.",
+      "cout": "Environ six minutes de reconstruction, même pour une ligne modifiée.",
+      "casse": "Plus de redéploiement possible depuis le code.",
+      "source": "2.3, 3, 4",
+      "preuve": { "titre": "Dockerfile (3 lignes)", "source": "2.3",
+        "lignes": ["FROM nousresearch/hermes-agent:v2026.9.24", "copie de config.yaml → /opt/hermes/seed-config.yaml", "dernier commit : 6987c381, « Update config.yaml »"] }
+    },
+    {
+      "id": "gh_vault", "couche": "deploiement", "titre": "hermes-vault", "chiffre": "589 commits", "statut": "actif",
+      "machine": "GitHub, dépôt privé ghelleu/hermes-vault",
+      "fait": "La copie du vault : notes, skills, miroir des mémoires. Aucun secret n'y entre.",
+      "entre": "Les commits poussés par vault_git.py.",
+      "sort": "Un clone possible pour reconstruire le vault (13.2).",
+      "cout": "Non précisé dans le document.",
+      "casse": "Plus de copie hors du volume pour la connaissance.",
+      "source": "2.3, 10.3, 12.1",
+      "preuve": { "titre": "Dernier commit au 15 octobre 2026", "source": "2.3, 10.3",
+        "lignes": ["9136be3", "« MAGNETIC : avis exterieur sur le dossier v6 »", "vérification : git ls-remote origin main"] }
+    },
+    {
+      "id": "cron", "couche": "deploiement", "titre": "Tâches planifiées", "chiffre": "7 · 1 en pause", "statut": "actif",
+      "mesure": { "titre": "État des tâches planifiées au 15 octobre 2026", "source": "11", "unite": "tâches", "segments": [ { "l": "actives", "v": 6 }, { "l": "en pause", "v": 1, "etat": "pause" } ] },
+      "machine": "Conteneur Railway ; /opt/data/cron/jobs.json",
+      "fait": "Sauvegarde nocturne, miroir Obsidian, rafraîchissement des jetons Google, surveillance des alertes de sécurité, veille du lundi, réparation de Tailscale, pont Elio (en pause).",
+      "entre": "L'horloge (le système raisonne en UTC).",
+      "sort": "Scripts exécutés, livraisons dans Telegram.",
+      "cout": "Sur 30 jours : 16 sessions de tâches planifiées.",
+      "casse": "La sauvegarde est la tâche la plus importante : sa panne est silencieuse (12).",
+      "source": "11, 5.3",
+      "preuve": { "titre": "Les sept tâches (jobs.json)", "source": "11",
+        "lignes": ["8f403b4498a6 sauvegarde · chaque jour 3 h UTC", "d473683bdfcc miroir Obsidian · 180 min", "194c5b9cdd11 jetons OAuth · 30 min · en échec", "b411607aaa21 alertes Google · 1 h", "1c2007698eef veille · lundi 7 h", "389ade52c1bb Tailscale · 15 min", "60254156653a pont Elio · 5 min · en pause"] }
+    },
+    {
+      "id": "ts", "couche": "deploiement", "titre": "Tailscale", "chiffre": "2 nœuds · SOCKS5", "statut": "actif",
+      "machine": "Conteneur Railway (démon userspace) et Mac de Guillaume",
+      "fait": "Relie le conteneur au Mac sans ouvrir de port. Démon en userspace-networking, proxy SOCKS5 sur 127.0.0.1:1055. L'identité du nœud vit sur le volume : pas de réauthentification au redémarrage.",
+      "entre": "La connexion SSH de la passerelle MCP.",
+      "sort": "Le Mac joignable à travers le tailnet.",
+      "cout": "Non précisé dans le document.",
+      "casse": "Blender devient injoignable.",
+      "source": "7.5",
+      "preuve": { "titre": "Les deux nœuds", "source": "7.5",
+        "lignes": ["hermes-railway : 100.116.245.51 (linux)", "macbook-air-de-guillaume : 100.106.146.95 (macOS)", "réparation : tailscale_ensure.sh toutes les 15 min"] }
+    },
+    {
+      "id": "jetons", "couche": "deploiement", "titre": "Jetons Google", "chiffre": "1 jeton révoqué", "statut": "panne",
+      "mesure": { "titre": "État des fichiers de jetons Google", "source": "9.1", "unite": "jetons", "segments": [ { "l": "rafraîchis", "v": 2 }, { "l": "révoqué", "v": 1, "etat": "panne" } ] },
+      "machine": "Volume /opt/data/google_token*.json",
+      "fait": "Trois fichiers de jetons. Le principal, google_token.json (mode 444), porte onze périmètres : Drive, Docs, Sheets, Calendar, Gmail, Contacts, Apps Script.",
+      "entre": "Le rafraîchissement automatique toutes les 30 minutes.",
+      "sort": "L'accès aux API Google.",
+      "cout": "Non précisé dans le document.",
+      "casse": "Les onze périmètres partagent le même identifiant client : une révocation en cascade peut tout emporter d'un coup (9.1).",
+      "source": "9.1, 15",
+      "preuve": { "titre": "État au 15 octobre 2026", "source": "9.1",
+        "lignes": ["google_token.json : rafraîchi normalement", "google_token_guillaumepro.json : rafraîchi normalement", "google_token_hint3rland.json : révoqué (invalid_grant)"] }
+    },
+    {
+      "id": "elio", "couche": "deploiement", "titre": "Pont Elio", "chiffre": "en pause", "statut": "pause",
+      "machine": "Tâche du conteneur ; fichiers JSONL dans Google Drive",
+      "fait": "Échange agent à agent avec Elio, l'agent OpenClaw du studio Hint3rland, par deux fichiers JSONL dans Drive, un par sens.",
+      "entre": "Les fichiers JSONL du pont.",
+      "sort": "Un réveil de l'agent si un fichier change.",
+      "cout": "Non précisé dans le document.",
+      "casse": "Réactiver sans refaire le jeton relance les mêmes échecs toutes les cinq minutes (15).",
+      "source": "9.3, 11, 15",
+      "preuve": { "titre": "Tâche pont_elio", "source": "9.3, 11",
+        "lignes": ["60254156653a, toutes les 5 min", "dernier échec : HTTP 400 au rafraîchissement du jeton Drive", "10 passages consécutifs ; en pause depuis le 15 octobre 2026"] }
+    },
+    {
+      "id": "secours", "couche": "deploiement", "titre": "Agent de secours", "chiffre": "service secours", "statut": "actif", "annexe": true,
+      "machine": "Second service Railway, même projet",
+      "fait": "Diagnostique et répare l'agent principal par l'API Railway : redéploiement, redémarrage, inspection, variables, sauvegardes du volume. Il a son propre bot Telegram.",
+      "entre": "Un appel de Guillaume quand l'agent principal ne répond plus.",
+      "sort": "Des actions sur le service hermes-railway.",
+      "cout": "Non précisé dans le document.",
+      "casse": "Plus de réparation indépendante de l'agent réparé.",
+      "source": "13.4, 17.1",
+      "preuve": { "titre": "Service secours", "source": "13.4, 17.1",
+        "lignes": ["identifiant f6a49b37-b541-4a0c-8279-03f24b0acf5b", "skill agent_de_secours (dossier devops du vault)", "railway_api.py doctor --service hermes-railway"] }
+    },
+
+    {
+      "id": "out_tg", "couche": "sorties", "titre": "Réponse Telegram", "chiffre": "texte ou voix", "statut": "actif",
+      "machine": "Service distant Telegram",
+      "fait": "La réponse revient dans le fil d'origine, en texte, ou en voix selon le mode réglé par /voice.",
+      "entre": "Le texte de l'orchestrateur, la voix de la synthèse.",
+      "sort": "Un message dans le fil.",
+      "cout": "Non précisé dans le document.",
+      "casse": "Guillaume ne reçoit plus de réponse.",
+      "source": "6.1, 7.6",
+      "preuve": { "titre": "Affichage", "source": "6.1",
+        "lignes": ["réactions Telegram désactivées", "affichage des appels d'outils désactivé"] }
+    },
+    {
+      "id": "out_doc", "couche": "sorties", "titre": "Document Google", "chiffre": "écrit par API", "statut": "actif",
+      "machine": "Service distant Google Docs",
+      "fait": "Le livrable écrit, mis à jour par l'API Google avec le jeton principal.",
+      "entre": "Le texte rédigé par l'agent.",
+      "sort": "Un document Google à jour.",
+      "cout": "Non précisé dans le document.",
+      "casse": "Le livrable ne s'écrit plus si le jeton principal tombe.",
+      "source": "9.1, 17.2",
+      "preuve": { "titre": "Accès", "source": "9.1, 17.2",
+        "lignes": ["token_manager.py : Drive, Gmail, Sheets, Docs, Calendar", "périmètre documents du jeton principal"] }
+    },
+    {
+      "id": "out_img", "couche": "sorties", "titre": "Image générée", "chiffre": "via Dadaland, non branché", "statut": "non-branche",
+      "machine": "Hors du système",
+      "fait": "Aujourd'hui, aucune image n'est générée par le système : l'agent remet un prompt à Guillaume.",
+      "entre": "Rien tant que Dadaland n'est pas branché.",
+      "sort": "Un prompt, pas une image.",
+      "cout": "Non précisé dans le document.",
+      "casse": "Rien de plus : la sortie n'existe pas encore.",
+      "source": "9.4, 15",
+      "preuve": { "titre": "Règle", "source": "9.4",
+        "lignes": ["livrer un prompt quand une image est demandée"] }
+    },
+    {
+      "id": "out_commit", "couche": "sorties", "titre": "Commit poussé", "chiffre": "vers hermes-vault", "statut": "actif",
+      "machine": "Volume /opt/data/vault, puis GitHub",
+      "fait": "Les notes de travail sont commitées puis poussées, en ne mettant en index que les fichiers touchés.",
+      "entre": "Les fichiers modifiés du vault.",
+      "sort": "Un commit sur ghelleu/hermes-vault.",
+      "cout": "Non précisé dans le document.",
+      "casse": "Les notes restent sur le volume seulement.",
+      "source": "10.3",
+      "preuve": { "titre": "Commande", "source": "10.3",
+        "lignes": ["python3 /opt/data/scripts/vault_git.py push \"message\"", "vérification : git ls-remote origin main"] }
+    },
+    {
+      "id": "out_arch", "couche": "sorties", "titre": "Archive nocturne", "chiffre": "1,52 à 1,72 Go", "statut": "actif",
+      "machine": "Conteneur Railway, puis Google Drive",
+      "fait": "Archive tar.gz complète déposée chaque nuit sur Drive, trente conservées. Elle contient memories/, skills/, cron/, scripts/, config.yaml, SOUL.md et state.db.",
+      "entre": "Le volume /opt/data.",
+      "sort": "hermes-backup-<date>_0300.tar.gz dans 02 SNAPSHOTS COMPLETS.",
+      "cout": "Dernière archive déposée à 03 h 04 le 15 octobre 2026.",
+      "casse": "Panne silencieuse : une archive de quelques kilo-octets signale l'échec connu. Vérifier l'artefact, jamais le journal (12.3).",
+      "source": "1, 11, 12.1, 12.3",
+      "preuve": { "titre": "Contrôle du 15 octobre 2026", "source": "12.1, 12.3",
+        "lignes": ["30 archives : de 1 519,3 à 1 716,1 Mo", "tâche 8f403b4498a6, chaque jour à 3 h UTC", "archive de quelques Ko = échec silencieux"] }
+    }
+  ],
+
+  "liens": [
+    { "id": "l01", "de": "memo",    "vers": "gw",      "type": "evt",   "etiquette": "fichier audio",                "source": "7.6" },
+    { "id": "l02", "de": "tg",      "vers": "gw",      "type": "evt",   "etiquette": "message · polling",            "source": "6.1" },
+    { "id": "l03", "de": "wa",      "vers": "gw",      "type": "off",   "etiquette": "non appairé",                  "source": "6.3" },
+    { "id": "l04", "de": "gw",      "vers": "stt",     "type": "cout",  "etiquette": "0 $ · 8 s ≈ 10 s",            "source": "7.6" },
+    { "id": "l05", "de": "stt",     "vers": "loop",    "type": "evt",   "etiquette": "texte fr",                     "source": "7.6" },
+    { "id": "l06", "de": "gw",      "vers": "loop",    "type": "evt",   "etiquette": "demande",                      "source": "6.1" },
+    { "id": "l07", "de": "soul",    "vers": "loop",    "type": "ctx",   "etiquette": "voix · règles",                "source": "10.1" },
+    { "id": "l08", "de": "mem",     "vers": "loop",    "type": "ctx",   "etiquette": "à chaque tour",                "source": "8" },
+    { "id": "l09", "de": "persona", "vers": "loop",    "type": "ctx",   "etiquette": "persona du fil",               "source": "6.1" },
+    { "id": "l10", "de": "skills",  "vers": "loop",    "type": "ctx",   "etiquette": "skill pertinent",              "source": "8" },
+    { "id": "l11", "de": "hist",    "vers": "loop",    "type": "ctx",   "etiquette": "échanges passés",              "source": "8" },
+    { "id": "l12", "de": "loop",    "vers": "comp",    "type": "cout",  "etiquette": "0,10 $ / M jetons",            "source": "5.1" },
+    { "id": "l13", "de": "loop",    "vers": "t_term",  "type": "outil", "etiquette": "commande",                     "source": "7.1" },
+    { "id": "l14", "de": "loop",    "vers": "t_web",   "type": "outil", "etiquette": "recherche",                    "source": "7.1" },
+    { "id": "l15", "de": "loop",    "vers": "t_tts",   "type": "outil", "etiquette": "lecture à voix haute",         "source": "7.6" },
+    { "id": "l16", "de": "loop",    "vers": "t_mem",   "type": "outil", "etiquette": "mémoire",                      "source": "7.1" },
+    { "id": "l17", "de": "loop",    "vers": "deleg",   "type": "outil", "etiquette": "délégation",                   "source": "4" },
+    { "id": "l18", "de": "deleg",   "vers": "sub",     "type": "outil", "etiquette": "≤ 3 · 600 s",                  "source": "4" },
+    { "id": "l19", "de": "sub",     "vers": "cat",     "type": "outil", "etiquette": "outil MCP",                    "source": "7.1" },
+    { "id": "l20", "de": "sub",     "vers": "t_mem",   "type": "outil", "etiquette": "recherche sessions",           "source": "7.1" },
+    { "id": "l21", "de": "sub",     "vers": "t_term",  "type": "outil", "etiquette": "lecture du vault",             "source": "7.1" },
+    { "id": "l22", "de": "loop",    "vers": "cat",     "type": "outil", "etiquette": "tool_search",                  "source": "4" },
+    { "id": "l23", "de": "cat",     "vers": "fc",      "type": "stdio", "etiquette": "stdio · npx",                  "source": "7.2" },
+    { "id": "l24", "de": "cat",     "vers": "fig",     "type": "http",  "etiquette": "HTTP · OAuth",                 "source": "7.2" },
+    { "id": "l25", "de": "cat",     "vers": "bl",      "type": "ssh",   "etiquette": "stdio → SSH tailnet",          "source": "7.5" },
+    { "id": "l26", "de": "ts",      "vers": "bl",      "type": "ssh",   "etiquette": "SOCKS5 :1055 → :9876",         "source": "7.5", "pos": 0.62 },
+    { "id": "l27", "de": "cat",     "vers": "dada",    "type": "off",   "etiquette": "MCP annoncé",                  "source": "9.4" },
+    { "id": "l28", "de": "t_term",  "vers": "ckpt",    "type": "data",  "etiquette": "avant modification",           "source": "2.2" },
+    { "id": "l29", "de": "curator", "vers": "skills",  "type": "data",  "etiquette": "archive après 90 j",           "source": "8" },
+    { "id": "l30", "de": "statedb", "vers": "hist",    "type": "data",  "etiquette": "messages_fts",                 "source": "8" },
+    { "id": "l31", "de": "vault",   "vers": "soul",    "type": "data",  "etiquette": "config/soul.md",               "source": "10.1" },
+    { "id": "l32", "de": "vault",   "vers": "skills",  "type": "data",  "etiquette": "vault/skills",                 "source": "10.3" },
+    { "id": "l33", "de": "t_mem",   "vers": "statedb", "type": "data",  "etiquette": "recherche",                    "source": "8" },
+    { "id": "l34", "de": "t_mem",   "vers": "holo",    "type": "data",  "etiquette": "faits par entité",             "source": "8" },
+    { "id": "l35", "de": "t_mem",   "vers": "mem",     "type": "data",  "etiquette": "écriture",                     "source": "8" },
+    { "id": "l36", "de": "t_term",  "vers": "vault",   "type": "data",  "etiquette": "écriture par terminal",        "source": "15" },
+    { "id": "l37", "de": "vault",   "vers": "out_commit", "type": "git", "etiquette": "commit",                      "source": "10.3" },
+    { "id": "l38", "de": "out_commit", "vers": "gh_vault", "type": "git", "etiquette": "git push",                   "source": "10.3" },
+    { "id": "l39", "de": "gh_rail", "vers": "railway", "type": "git",   "etiquette": "push → image ~6 min → redéploiement", "source": "1, 3" },
+    { "id": "l40", "de": "cron",    "vers": "out_arch", "type": "data", "etiquette": "3 h UTC",                      "source": "11" },
+    { "id": "l41", "de": "out_arch", "vers": "drive",  "type": "data",  "etiquette": "02 SNAPSHOTS",                 "source": "12.1" },
+    { "id": "l42", "de": "vault",   "vers": "drive",   "type": "data",  "etiquette": "Obsidian · 180 min",           "source": "11" },
+    { "id": "l43", "de": "cron",    "vers": "ts",      "type": "outil", "etiquette": "réparation · 15 min",          "source": "11" },
+    { "id": "l44", "de": "cron",    "vers": "jetons",  "type": "off",   "etiquette": "invalid_grant · 51 échecs",    "source": "9.1" },
+    { "id": "l45", "de": "cron",    "vers": "out_tg",  "type": "off",   "etiquette": "livraison 16965 · 401",        "source": "11" },
+    { "id": "l46", "de": "elio",    "vers": "drive",   "type": "off",   "etiquette": "HTTP 400 · en pause",          "source": "9.3" },
+    { "id": "l47", "de": "secours", "vers": "railway", "type": "outil", "etiquette": "API Railway",                  "source": "13.4" },
+    { "id": "l48", "de": "loop",    "vers": "out_tg",  "type": "evt",   "etiquette": "réponse",                      "source": "6.1" },
+    { "id": "l49", "de": "t_tts",   "vers": "out_tg",  "type": "evt",   "etiquette": "voix Denise",                  "source": "7.6" },
+    { "id": "l50", "de": "t_term",  "vers": "out_doc", "type": "outil", "etiquette": "API Docs",                     "source": "9.1" },
+    { "id": "l51", "de": "jetons",  "vers": "out_doc", "type": "data",  "etiquette": "jeton principal",              "source": "9.1" },
+    { "id": "l52", "de": "dada",    "vers": "out_img", "type": "off",   "etiquette": "non branché",                  "source": "9.4" }
+  ],
+
+  "scenario": {
+    "titre": "Le mémo du lundi matin",
+    "dureeEtape": 10,
+    "etapes": [
+      {
+        "titre": "Le mémo arrive",
+        "texte": "Un lundi matin, Guillaume envoie un mémo vocal de quarante secondes dans le fil de travail : « Il me faut la note d'intention et une vue 3D du pavillon pour l'appel à projets, avec les références qu'on a vues, et une remise en page propre pour le jury. » La passerelle le récupère par interrogation continue.",
+        "ou": "Téléphone → service Telegram → conteneur Railway, région sfo (San Francisco)",
+        "fichier": "hermes gateway run · jeton TELEGRAM_BOT_TOKEN dans /opt/data/.env",
+        "source": "2.1, 6.1",
+        "blocs": ["memo", "tg", "gw"], "liens": ["l01"]
+      },
+      {
+        "titre": "Transcription sur place",
+        "texte": "faster-whisper transcrit en français, sans rien envoyer hors du système, pour 0 dollar. Seule mesure publiée : un mémo de 8 secondes se transcrit en une dizaine de secondes, chargement du modèle compris. Le document ne donne aucune mesure pour 40 secondes.",
+        "ou": "Conteneur Railway (sfo)",
+        "fichier": "/opt/data/.cache/huggingface/ : modèle large-v3, 3,1 Go",
+        "source": "7.6",
+        "blocs": ["gw", "stt"], "liens": ["l04", "l05"]
+      },
+      {
+        "titre": "Assemblage du contexte",
+        "texte": "Le texte transcrit rejoint la voix et les règles de config/soul.md, la mémoire injectée, les skills pertinents et l'historique, pour former la requête envoyée au modèle. Depuis le 12 octobre 2026, l'antithèse, la règle de trois et la tournure « ni… ni… mais… » sont proscrites.",
+        "ou": "Volume /opt/data, lu par le conteneur",
+        "fichier": "vault/config/soul.md · memories/MEMORY.md, USER.md · vault/skills/ · state.db",
+        "source": "8, 10.1, 16",
+        "blocs": ["soul", "mem", "skills", "hist", "statedb", "vault", "loop"], "liens": ["l31", "l07", "l08", "l32", "l10", "l30", "l11"]
+      },
+      {
+        "titre": "Un plan en trois volets",
+        "texte": "L'orchestrateur, sur le modèle deepseek-flash, constate que la demande exige de la recherche externe, de la connaissance interne et une production 3D. Il ouvre un plan en trois volets, dans la limite de 1 000 tours.",
+        "ou": "Conteneur Railway · appel à https://api.deepseek.com",
+        "fichier": "/opt/data/config.yaml : agent.max_turns = 1000",
+        "source": "4, 5.1",
+        "blocs": ["loop", "turns"], "liens": ["l05"]
+      },
+      {
+        "titre": "Volet recherche",
+        "texte": "delegate_task ouvre un sous-agent sur claude-haiku-4-5, 600 secondes au plus. Il cherche l'outil dans le catalogue MCP, interroge Firecrawl en local par stdio, et ramène des pages citées.",
+        "ou": "Conteneur Railway · processus npx firecrawl-mcp",
+        "fichier": "config.yaml, section mcp_servers.firecrawl",
+        "source": "4, 7.2",
+        "blocs": ["loop", "deleg", "sub", "cat", "fc"], "liens": ["l17", "l18", "l19", "l23"]
+      },
+      {
+        "titre": "Volet connaissance",
+        "texte": "Un second sous-agent lit le vault, univers act_paysages_territoires de la catégorie 03_office, et cherche dans state.db les échanges passés sur le sujet, puis remonte des citations. Trois sous-agents au plus tournent en même temps.",
+        "ou": "Conteneur Railway · volume /opt/data",
+        "fichier": "vault, univers act_paysages_territoires · state.db (index messages_fts)",
+        "source": "4, 8, 10.1",
+        "blocs": ["deleg", "sub", "t_term", "t_mem", "vault", "statedb"], "liens": ["l18", "l21", "l36", "l20", "l33"]
+      },
+      {
+        "titre": "Rédaction de la note",
+        "texte": "L'agent principal rédige la note d'intention lui-même, en respectant les règles de rédaction enregistrées.",
+        "ou": "Conteneur Railway · modèle deepseek-flash",
+        "fichier": "vault/config/soul.md",
+        "source": "10.1, 16",
+        "blocs": ["loop", "soul"], "liens": ["l07"]
+      },
+      {
+        "titre": "Une vue 3D par Blender",
+        "texte": "La commande part de la passerelle locale mac_blender_mcp.sh, traverse le tailnet en SSH de hermes-railway (100.116.245.51) vers macbook-air-de-guillaume (100.106.146.95) par le proxy SOCKS5, atteint Blender qui écoute sur 127.0.0.1:9876, et un rendu revient dans la session. À discuter : la section 9.4 confie toute génération de média à Dadaland.",
+        "ou": "Conteneur Railway → tailnet → Mac de Guillaume",
+        "fichier": "/opt/data/scripts/mac_blender_mcp.sh · clé /opt/data/.ssh/id_hermes_mac",
+        "source": "7.5, 9.4",
+        "blocs": ["loop", "cat", "bl", "ts"], "liens": ["l22", "l25", "l26"]
+      },
+      {
+        "titre": "Mise en page dans Figma",
+        "texte": "Par le serveur MCP distant de Figma (HTTP, OAuth), l'agent ouvre le fichier de gabarit du cours, lit les composants graphiques, remplace les textes et récupère un export d'images.",
+        "ou": "Service distant https://mcp.figma.com/mcp",
+        "fichier": "/opt/data/mcp-tokens/figma.json",
+        "source": "7.2",
+        "blocs": ["loop", "cat", "fig"], "liens": ["l22", "l24"]
+      },
+      {
+        "titre": "Livraison",
+        "texte": "Le texte est écrit dans un document Google par API, avec le jeton principal. La réponse revient dans Telegram, en texte, ou en voix fr-FR-DeniseNeural selon le mode /voice. Pour une image générée, Dadaland n'est pas branché : l'agent remet un prompt à Guillaume.",
+        "ou": "Conteneur Railway → API Google → Telegram",
+        "fichier": "/opt/data/google_token.json · token_manager.py",
+        "source": "6.1, 7.6, 9.1, 9.4",
+        "blocs": ["t_term", "out_doc", "jetons", "loop", "t_tts", "out_tg", "dada", "out_img"], "liens": ["l50", "l51", "l48", "l49", "l52"]
+      },
+      {
+        "titre": "Traçabilité",
+        "texte": "Les notes de travail sont écrites dans le vault puis poussées sur GitHub. Le miroir Obsidian les recopie sur Drive toutes les 180 minutes. Les autres tâches suivent : archive nocturne à 3 h UTC (1,52 à 1,72 Go), jetons toutes les 30 minutes, réparation de Tailscale toutes les 15 minutes.",
+        "ou": "Volume /opt/data → GitHub → Google Drive",
+        "fichier": "/opt/data/cron/jobs.json · vault_git.py · obsidian_sync.py · backup-to-drive.sh",
+        "source": "10.3, 11, 12.1",
+        "blocs": ["t_term", "vault", "out_commit", "gh_vault", "drive", "cron", "out_arch", "ts"], "liens": ["l36", "l37", "l38", "l42", "l40", "l41", "l43"]
+      },
+      {
+        "titre": "Les pannes réelles",
+        "texte": "Au 15 octobre 2026 : le jeton Google hint3rland est révoqué (invalid_grant), la tâche de rafraîchissement échoue depuis 51 passages et sa livraison Telegram répond 401. Le pont vers Elio est en pause après 10 échecs HTTP 400. Dadaland n'est pas encore branché.",
+        "ou": "Conteneur Railway · Google · Drive",
+        "fichier": "auto_refresh_tokens.py · bridge_watch_elio.py",
+        "source": "9.1, 9.3, 9.4, 15",
+        "blocs": ["cron", "jetons", "out_tg", "elio", "drive", "cat", "dada", "out_img"], "liens": ["l44", "l45", "l46", "l27", "l52"]
+      }
+    ]
+  }
+}
+
+</script>
+  <script>
+/*
+  HERMES ATLAS — rendu et interactions.
+
+  Aucune donnée ici : tout vient de window.DONNEES (data.js).
+  Toutes les tailles et couleurs viennent des variables CSS de styles.css.
+  Aucune bibliothèque, aucune requête réseau.
+
+  Plan du fichier :
+    1. Réglages, index des données, état
+    2. Mise à l'échelle de la scène
+    3. Disposition de base (couches, composants, points d'accroche)
+    4. Dessin SVG (guides, flux, composants, étiquettes, jeton)
+    5. Éclatement : position de chaque élément selon le curseur
+    6. Chemins amont / aval et mise en évidence
+    7. Panneau de gauche : couches et flux
+    8. Carte de droite : fiche d'un composant
+    9. Parcours pas à pas
+   10. Recherche
+   11. Zoom, déplacement, cadrage
+   12. Export PNG
+   13. Clavier, adresse (#bloc=…, #etape=…, #eclat=…), démarrage
+*/
+(function () {
+  'use strict';
+
+  /* ============ 1. Réglages, index, état ============ */
+
+  const D = window.DONNEES;
+  const NS = 'http://www.w3.org/2000/svg';
+  const css = getComputedStyle(document.documentElement);
+  const cssVal = (n) => css.getPropertyValue(n).trim();
+  const cssNum = (n) => parseFloat(cssVal(n));
+
+  const R = {
+    gauche: cssNum('--carte-gauche'),
+    droite: cssNum('--carte-droite'),
+    haut: cssNum('--carte-haut'),
+    bas: cssNum('--carte-bas'),
+    larg: cssNum('--noeud-largeur'),
+    padH: cssNum('--noeud-pad-h'),
+    padV: cssNum('--noeud-pad-v'),
+    espace: cssNum('--noeud-espace'),
+    rayon: cssNum('--noeud-rayon'),
+    tTitre: cssNum('--noeud-t-titre'),
+    tChiffre: cssNum('--noeud-t-chiffre'),
+    interligne: cssNum('--noeud-interligne'),
+    tEtiquette: cssNum('--t-etiquette'),
+    tCouche: cssNum('--t-couche'),
+    dureeIntro: cssNum('--duree-intro'),
+    dureeLien: cssNum('--duree-etape')
+  };
+  const mouvementReduit = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  const couches = D.couches;
+  const rangCouche = {};
+  const coucheParId = {};
+  couches.forEach((c, i) => { rangCouche[c.id] = i; coucheParId[c.id] = c; });
+  const blocs = {};
+  D.blocs.forEach((b) => { blocs[b.id] = b; });
+  const types = {};
+  D.typesLiens.forEach((t) => { types[t.id] = t; });
+  const liens = D.liens.filter((l) => {
+    const ok = blocs[l.de] && blocs[l.vers] && types[l.type];
+    if (!ok) console.warn('Lien ignoré (bloc ou type inconnu) :', l);
+    return ok;
+  });
+  const lienParId = {};
+  const sortants = {};
+  const entrants = {};
+  liens.forEach((l) => {
+    lienParId[l.id] = l;
+    (sortants[l.de] = sortants[l.de] || []).push(l);
+    (entrants[l.vers] = entrants[l.vers] || []).push(l);
+  });
+  const etapes = D.scenario.etapes;
+
+  const etat = {
+    selection: null,                 // composant dont la fiche est ouverte
+    survol: null,                    // { type: 'lien' | 'bloc' | 'couche' | 'flux', id }
+    lecture: { active: false, enCours: false, index: 0, minuterie: null },
+    couchesOff: new Set(),
+    typesOff: new Set(),
+    trouves: null,                   // résultats de recherche
+    eclat: 1                         // 0 = un seul programme, 1 = neuf couches
+  };
+
+  /* ============ Outils ============ */
+
+  function cree(tag, attrs, parent) {
+    const n = document.createElementNS(NS, tag);
+    if (attrs) Object.keys(attrs).forEach((k) => { if (attrs[k] !== undefined && attrs[k] !== null) n.setAttribute(k, attrs[k]); });
+    if (parent) parent.appendChild(n);
+    return n;
+  }
+  function texteSvg(parent, attrs, contenu) {
+    const t = cree('text', attrs, parent);
+    t.textContent = contenu;
+    return t;
+  }
+  function el(tag, classe, texte, parent) {
+    const n = document.createElement(tag);
+    if (classe) n.className = classe;
+    if (texte !== undefined && texte !== null) n.textContent = texte;
+    if (parent) parent.appendChild(n);
+    return n;
+  }
+  const deux = (n) => String(n).padStart(2, '0');
+  const borne = (v, a, b) => Math.max(a, Math.min(b, v));
+  const adoucir = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
+  const sansAccents = (s) => String(s).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+
+  /* ============ 2. Mise à l'échelle de la scène ============ */
+
+  const scene = document.getElementById('scene');
+  function ajusterScene() {
+    const k = Math.min(window.innerWidth / 1920, window.innerHeight / 1080);
+    scene.style.setProperty('--k', k);
+  }
+  window.addEventListener('resize', ajusterScene);
+  ajusterScene();
+
+  /* ============ 3. Disposition de base ============ */
+
+  const svg = document.getElementById('carte');
+  const defs = cree('defs', null, svg);
+  // Ombre douce sous les composants
+  const filtre = cree('filter', { id: 'ombre', x: '-20%', y: '-30%', width: '140%', height: '170%' }, defs);
+  cree('feDropShadow', { dx: 0, dy: 2, stdDeviation: 3, 'flood-color': '#14140f', 'flood-opacity': 0.07 }, filtre);
+
+  const gGuides = cree('g', { 'class': 'calque-guides' }, svg);
+  const gMonolithe = cree('g', { 'class': 'monolithe' }, svg);
+  const gFlux = cree('g', { 'class': 'calque-flux' }, svg);
+  const gNoeuds = cree('g', { 'class': 'calque-noeuds' }, svg);
+  const gEtiquettes = cree('g', { 'class': 'calque-etiquettes' }, svg);
+  const gJeton = cree('g', { 'class': 'jeton', visibility: 'hidden' }, svg);
+  cree('circle', { 'class': 'halo', r: 14 }, gJeton);
+  cree('circle', { 'class': 'coeur', r: 6 }, gJeton);
+
+  // Mesure de texte, pour couper les libellés de façon déterministe
+  const mesure = cree('text', { x: -9999, y: -9999, 'aria-hidden': 'true' }, svg);
+  function largeur(txt, taille, poids) {
+    mesure.setAttribute('font-size', taille);
+    mesure.setAttribute('font-weight', poids);
+    mesure.textContent = txt;
+    return mesure.getComputedTextLength();
+  }
+  function couper(txt, taille, poids, max) {
+    const mots = [];
+    String(txt).split(/\s+/).filter(Boolean).forEach((m) => {
+      if (largeur(m, taille, poids) <= max) { mots.push(m); return; }
+      // Mot trop long : coupure après / - _ . qui équilibre les deux moitiés
+      let meilleure = null;
+      for (let i = 1; i < m.length; i++) {
+        if ('/-_.'.indexOf(m[i - 1]) < 0) continue;
+        const w = Math.max(largeur(m.slice(0, i), taille, poids), largeur(m.slice(i), taille, poids));
+        if (w <= max && (!meilleure || w < meilleure.w)) meilleure = { i: i, w: w };
+      }
+      if (meilleure) { mots.push(m.slice(0, meilleure.i)); mots.push(m.slice(meilleure.i)); } else mots.push(m);
+    });
+    const lignes = [];
+    let cour = '';
+    mots.forEach((m) => {
+      const essai = cour ? cour + ' ' + m : m;
+      if (!cour || largeur(essai, taille, poids) <= max) cour = essai;
+      else { lignes.push(cour); cour = m; }
+    });
+    if (cour) lignes.push(cour);
+    return lignes;
+  }
+
+  const pas = (R.droite - R.gauche) / couches.length;
+  const centreCouche = (i) => R.gauche + pas * (i + 0.5);
+  const hT = R.tTitre * R.interligne;
+  const hC = R.tChiffre * R.interligne;
+  const texteMax = R.larg - 2 * R.padH - 12;     // 12 : place de la pastille d'état
+  const base = {};                                 // id → { cx, cy, w, h, lt, lc }
+  const HAUT_JAUGE = 12;                           // place de la micro-jauge sous le chiffre
+  // Teintes des segments d'une mesure : encres dégradées, rouge réservé aux états en panne ou en pause
+  const TEINTES = [cssVal('--encre'), '#7d7c76', '#bdbcb4'];
+  const teinte = (seg, i) => (seg.etat === 'panne' || seg.etat === 'pause') ? cssVal('--critique') : TEINTES[i % TEINTES.length];
+  function totalMesure(m) { return Math.max(m.max || 0, m.segments.reduce((a, x) => a + x.v, 0)); }
+  // Micro-jauge SVG : segments séparés d'un espace de 2, extrémités arrondies
+  function jaugeSvg(parent, m, x, y, w, h) {
+    const g = cree('g', { 'class': 'jauge' }, parent);
+    cree('rect', { x: x, y: y, width: w, height: h, rx: h / 2, fill: '#ebeae5' }, g);
+    const total = totalMesure(m);
+    let cx = x;
+    m.segments.forEach((seg, i) => {
+      const sw = Math.max(1.5, w * seg.v / total - (i < m.segments.length - 1 ? 2 : 0));
+      cree('rect', { x: cx, y: y, width: sw, height: h, rx: h / 2, fill: teinte(seg, i) }, g);
+      cx += sw + 2;
+    });
+    return g;
+  }
+  const colonnes = couches.map(() => []);
+  D.blocs.forEach((b) => {
+    if (rangCouche[b.couche] === undefined) { console.warn('Couche inconnue :', b); return; }
+    colonnes[rangCouche[b.couche]].push(b);
+  });
+  // Nombre de flux accrochés sur chaque côté d'un composant (connu dès maintenant : il ne dépend que des couches)
+  const rangDe = (id) => rangCouche[blocs[id].couche];
+  const nbPorts = {};
+  liens.forEach((l) => {
+    const a = rangDe(l.de), b = rangDe(l.vers);
+    const cd = a === b ? 1 : (a < b ? 1 : -1);
+    const cv = a === b ? 1 : (a < b ? -1 : 1);
+    nbPorts[l.de + '|' + cd] = (nbPorts[l.de + '|' + cd] || 0) + 1;
+    nbPorts[l.vers + '|' + cv] = (nbPorts[l.vers + '|' + cv] || 0) + 1;
+  });
+  const ECART_PORT = 13;   // espace vertical réservé à chaque flux sur un côté
+  colonnes.forEach((col, i) => {
+    let total = 0;
+    col.forEach((b, k) => {
+      const lt = couper(b.titre, R.tTitre, 620, texteMax);
+      const lc = b.chiffre ? couper(b.chiffre, R.tChiffre, 400, texteMax) : [];
+      const hTexte = 2 * R.padV + lt.length * hT + lc.length * hC + (b.mesure ? HAUT_JAUGE : 0);
+      // Un composant qui reçoit beaucoup de flux grandit : chaque flux garde sa place
+      const ports = Math.max(nbPorts[b.id + '|1'] || 0, nbPorts[b.id + '|-1'] || 0);
+      const h = Math.max(hTexte, ports * ECART_PORT + 18);
+      base[b.id] = { w: R.larg, h: h, lt: lt, lc: lc, rang: i };
+      total += h + (k ? R.espace : 0);
+    });
+    // Colonne centrée verticalement dans la zone de carte
+    let y = R.haut + (R.bas - R.haut - total) / 2;
+    col.forEach((b) => {
+      base[b.id].cx = centreCouche(i);
+      base[b.id].cy = y + base[b.id].h / 2;
+      y += base[b.id].h + R.espace;
+    });
+  });
+
+  // Points d'accroche : chaque flux sort et entre par un côté, réparti le long de ce côté
+  const accroches = {};
+  liens.forEach((l) => {
+    const a = base[l.de];
+    const b = base[l.vers];
+    let cote;
+    if (a.rang === b.rang) cote = { de: 1, vers: 1 };               // même couche : arc par la droite
+    else if (a.rang < b.rang) cote = { de: 1, vers: -1 };
+    else cote = { de: -1, vers: 1 };
+    l._cote = cote;
+    const ka = l.de + '|' + cote.de;
+    const kb = l.vers + '|' + cote.vers;
+    (accroches[ka] = accroches[ka] || []).push({ l: l, bout: 'de', autre: b.cy });
+    (accroches[kb] = accroches[kb] || []).push({ l: l, bout: 'vers', autre: a.cy });
+  });
+  Object.keys(accroches).forEach((k) => {
+    const id = k.split('|')[0];
+    const liste = accroches[k].sort((p, q) => p.autre - q.autre || (p.l.id < q.l.id ? -1 : 1));
+    const n = liste.length;
+    liste.forEach((p, i) => {
+      const f = n === 1 ? 0.5 : 0.14 + 0.72 * i / (n - 1);    // position relative sur la hauteur
+      p.l[p.bout === 'de' ? '_fDe' : '_fVers'] = f;
+    });
+    void id;
+  });
+
+  /* ============ 4. Dessin ============ */
+
+  // Guides et en-têtes de couche
+  couches.forEach((c, i) => {
+    const g = cree('g', { 'class': 'couche', 'data-couche': c.id }, gGuides);
+    c._g = g;
+    c._guide = cree('line', { 'class': 'couche-guide', y1: R.haut - 18, y2: R.bas + 6 }, g);
+    c._num = texteSvg(g, { 'class': 'couche-num', 'text-anchor': 'middle', 'font-size': R.tCouche }, deux(c.num));
+    c._nom = texteSvg(g, { 'class': 'couche-nom', 'text-anchor': 'middle', 'font-size': R.tCouche }, c.nom);
+    void i;
+  });
+
+  // Pointes de flèche, une par sens de flux
+  D.typesLiens.forEach((t) => {
+    const m = cree('marker', {
+      id: 'fl-' + t.id, viewBox: '0 0 10 10', refX: 8.5, refY: 5, markerWidth: 8, markerHeight: 8,
+      markerUnits: 'userSpaceOnUse', orient: 'auto-start-reverse'
+    }, defs);
+    cree('path', { d: 'M1,1.5 L9,5 L1,8.5', fill: 'none', stroke: cssVal('--flux-' + t.id), 'stroke-width': 1.6, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, m);
+  });
+
+  // Flux
+  liens.forEach((l) => {
+    const t = types[l.type];
+    const g = cree('g', { 'class': 'flux flux--' + l.type, 'data-id': l.id }, gFlux);
+    l._g = g;
+    l._trait = cree('path', { 'class': 'flux-trait' }, g);
+    l._perles = cree('path', { 'class': 'flux-perles' }, g);
+    l._zone = cree('path', { 'class': 'flux-zone' }, g);
+    cree('title', null, l._zone).textContent = t.nom + ' · ' + blocs[l.de].titre + ' → ' + blocs[l.vers].titre + ' : ' + l.etiquette + ' (§ ' + l.source + ')';
+    l._fleches = { fin: t.fleche !== 'aucune', debut: t.fleche === 'double' };
+    l._zone.addEventListener('mouseenter', () => { etat.survol = { type: 'lien', id: l.id }; appliquerFocus(); });
+    l._zone.addEventListener('mouseleave', () => { etat.survol = null; appliquerFocus(); });
+
+    // Étiquette : pastille blanche avec un trait de la couleur du flux
+    const texte = l.etiquette;
+    const lw = largeur(texte, R.tEtiquette, 600) + 34;
+    const lh = R.tEtiquette + 12;
+    const ge = cree('g', { 'class': 'etiquette' }, gEtiquettes);
+    cree('rect', { x: -lw / 2, y: -lh / 2, width: lw, height: lh, rx: lh / 2 }, ge);
+    cree('line', { 'class': 'etq-trait', x1: -lw / 2 + 10, x2: -lw / 2 + 20, y1: 0, y2: 0, stroke: cssVal('--flux-' + l.type) }, ge);
+    texteSvg(ge, { x: -lw / 2 + 26, y: 0.5, 'dominant-baseline': 'central', 'font-size': R.tEtiquette }, texte);
+    l._etq = ge;
+    l._etqTaille = { w: lw, h: lh };
+
+    // Badge toujours visible : croix pour un flux hors service, « $ » pour un flux de coût
+    if (l.type === 'off' || l.type === 'cout') {
+      const gb = cree('g', { 'class': 'badge badge--' + l.type }, gEtiquettes);
+      cree('circle', { r: 7.5 }, gb);
+      if (l.type === 'off') cree('path', { d: 'M-2.6,-2.6 L2.6,2.6 M2.6,-2.6 L-2.6,2.6' }, gb);
+      else texteSvg(gb, { 'text-anchor': 'middle', 'dominant-baseline': 'central', 'font-size': 10, y: 0.5 }, '$');
+      l._badge = gb;
+    }
+  });
+
+  // Composants
+  D.blocs.forEach((b) => {
+    const g0 = base[b.id];
+    if (!g0) return;
+    const statut = b.statut || 'actif';
+    const c = coucheParId[b.couche];
+    const g = cree('g', {
+      'class': 'noeud noeud--' + statut, 'data-id': b.id, tabindex: 0, role: 'button',
+      'aria-label': b.titre + (b.chiffre ? ', ' + b.chiffre : '') + '. Couche ' + c.num + ', ' + c.nom +
+        (statut !== 'actif' ? '. ' + D.statuts[statut].nom : '') + '. Entrée pour ouvrir la fiche.'
+    }, gNoeuds);
+    const interne = cree('g', { transform: 'translate(' + (-g0.w / 2) + ',' + (-g0.h / 2) + ')' }, g);
+    cree('rect', { 'class': 'noeud-fond', width: g0.w, height: g0.h, rx: R.rayon, filter: statut === 'actif' || statut === 'panne' || statut === 'pause' ? 'url(#ombre)' : null }, interne);
+    cree('circle', { 'class': 'noeud-pastille', cx: R.padH + 3, cy: R.padV + hT / 2, r: 3.5 }, interne);
+    const gt = cree('g', { 'class': 'noeud-textes' }, interne);
+    let y = R.padV;
+    const xTexte = R.padH + 13;
+    g0.lt.forEach((li) => { texteSvg(gt, { 'class': 'noeud-titre', x: xTexte, y: y + R.tTitre * 0.93, 'font-size': R.tTitre }, li); y += hT; });
+    g0.lc.forEach((li) => { texteSvg(gt, { 'class': 'noeud-chiffre', x: xTexte, y: y + R.tChiffre * 0.95, 'font-size': R.tChiffre }, li); y += hC; });
+    if (b.mesure) jaugeSvg(gt, b.mesure, xTexte, y + 5, g0.w - xTexte - R.padH, 4);
+    b._g = g;
+    b._textes = gt;
+
+    g.addEventListener('click', (e) => { e.stopPropagation(); ouvrirFiche(b.id); });
+    g.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); ouvrirFiche(b.id); } });
+    g.addEventListener('mouseenter', () => { etat.survol = { type: 'bloc', id: b.id }; appliquerFocus(); });
+    g.addEventListener('mouseleave', () => { etat.survol = null; appliquerFocus(); });
+    g.addEventListener('focus', () => { if (g.matches(':focus-visible')) { etat.survol = { type: 'bloc', id: b.id }; appliquerFocus(); } });
+    g.addEventListener('blur', () => { etat.survol = null; appliquerFocus(); });
+  });
+
+  /* ============ 5. Éclatement ============ */
+
+  // À 0, les neuf couches se resserrent en un seul bloc ; à 1, elles se déploient.
+  const CX = (R.gauche + R.droite) / 2;
+  const CY = (R.haut + R.bas) / 2;
+  const pos = {};
+  function calculerPositions() {
+    const e = adoucir(etat.eclat);
+    const kx = 0.05 + 0.95 * e;
+    // La taille des composants suit l'écart entre couches : ils ne se chevauchent jamais
+    const s = borne(kx * pas * 0.9 / R.larg, 0.08, 1);
+    const ky = Math.max(s, 0.08);
+    Object.keys(base).forEach((id) => {
+      const g0 = base[id];
+      pos[id] = { x: CX + (g0.cx - CX) * kx, y: CY + (g0.cy - CY) * ky, s: s, w: g0.w * s, h: g0.h * s };
+    });
+    return { e: e, kx: kx, ky: ky, s: s };
+  }
+  function bout(id, cote, f) {
+    const p = pos[id];
+    return { x: p.x + cote * p.w / 2, y: p.y - p.h / 2 + p.h * f };
+  }
+  function trace(l) {
+    const p1 = bout(l.de, l._cote.de, l._fDe);
+    const p2 = bout(l.vers, l._cote.vers, l._fVers);
+    if (l._cote.de === l._cote.vers) {
+      const b = 18 + Math.abs(p2.y - p1.y) * 0.08;
+      return 'M' + p1.x + ',' + p1.y + ' C' + (p1.x + b) + ',' + p1.y + ' ' + (p2.x + b) + ',' + p2.y + ' ' + p2.x + ',' + p2.y;
+    }
+    const sens = l._cote.de;
+    const dx = Math.max(28, Math.abs(p2.x - p1.x) * 0.45);
+    return 'M' + p1.x + ',' + p1.y + ' C' + (p1.x + sens * dx) + ',' + p1.y + ' ' + (p2.x - sens * dx) + ',' + p2.y + ' ' + p2.x + ',' + p2.y;
+  }
+
+  // Le monolithe : à 0 %, le système n'est qu'un programme (section 1 du document)
+  const mono = {};
+  (function () {
+    const M = D.monolithe || {};
+    mono.fond = cree('rect', { 'class': 'mono-fond', rx: 18 }, gMonolithe);
+    mono.textes = cree('g', { 'class': 'mono-textes', 'text-anchor': 'middle' }, gMonolithe);
+    mono.surtitre = texteSvg(mono.textes, { 'class': 'mono-surtitre', y: -58 }, (M.surtitre || '').toUpperCase());
+    mono.titre = texteSvg(mono.textes, { 'class': 'mono-titre', y: -16 }, M.titre || '');
+    mono.ligne = texteSvg(mono.textes, { 'class': 'mono-ligne', y: 16 }, M.ligne || '');
+    mono.citation = texteSvg(mono.textes, { 'class': 'mono-citation', y: 50 }, M.citation || '');
+    mono.source = texteSvg(mono.textes, { 'class': 'mono-source', y: 78 }, M.source ? '§ ' + M.source : '');
+    // Neuf traits : les couches encore repliées
+    mono.traits = couches.map((c, i) => cree('rect', { 'class': 'mono-trait', width: 3, height: 26, rx: 1.5, x: -60 + i * 15 - 1.5, y: 98 }, mono.textes));
+  })();
+
+  function majGeometrie() {
+    const k = calculerPositions();
+    const opaciteTexte = borne((k.e - 0.55) / 0.35, 0, 1);
+    // Composants et flux apparaissent pendant que le monolithe s'efface
+    const apparition = borne((k.e - 0.12) / 0.3, 0, 1);
+    const effacement = 1 - borne(k.e / 0.32, 0, 1);
+    gNoeuds.setAttribute('opacity', apparition);
+    gFlux.setAttribute('opacity', apparition);
+    gEtiquettes.setAttribute('opacity', apparition);
+    gMonolithe.setAttribute('opacity', effacement);
+    gMonolithe.setAttribute('visibility', effacement > 0.01 ? 'visible' : 'hidden');
+    const mw = 520 + 300 * (1 - effacement);
+    const mh = 300 + 120 * (1 - effacement);
+    mono.fond.setAttribute('x', CX - mw / 2); mono.fond.setAttribute('y', CY - mh / 2);
+    mono.fond.setAttribute('width', mw); mono.fond.setAttribute('height', mh);
+    mono.textes.setAttribute('transform', 'translate(' + CX + ',' + (CY - 20) + ')');
+    // Couches
+    couches.forEach((c, i) => {
+      const x = CX + (centreCouche(i) - CX) * k.kx;
+      c._guide.setAttribute('x1', x); c._guide.setAttribute('x2', x);
+      c._num.setAttribute('x', x); c._num.setAttribute('y', R.haut - 50);
+      c._nom.setAttribute('x', x); c._nom.setAttribute('y', R.haut - 32);
+      c._num.setAttribute('opacity', opaciteTexte);
+      c._nom.setAttribute('opacity', borne((k.e - 0.82) / 0.18, 0, 1));   // noms : seulement une fois déployés
+      c._guide.setAttribute('opacity', opaciteTexte);
+    });
+    // Composants
+    D.blocs.forEach((b) => {
+      const p = pos[b.id];
+      if (!p) return;
+      b._g.setAttribute('transform', 'translate(' + p.x + ',' + p.y + ') scale(' + p.s + ')');
+      b._textes.setAttribute('opacity', opaciteTexte);
+    });
+    // Flux, étiquettes, badges
+    liens.forEach((l) => {
+      const d = trace(l);
+      l._trait.setAttribute('d', d);
+      l._perles.setAttribute('d', d);
+      l._zone.setAttribute('d', d);
+      const L = l._trait.getTotalLength();
+      const pt = l._trait.getPointAtLength(L * (l.pos !== undefined ? l.pos : 0.5));
+      if (l._badge) l._badge.setAttribute('transform', 'translate(' + pt.x + ',' + pt.y + ')');
+    });
+    if (cheminsJeton.length && !etat.lecture.enCours) figerJeton();
+    placerEtiquettes();
+  }
+
+  // Chaque étiquette visible cherche, le long de son flux, une place qui ne recouvre
+  // ni un composant ni une autre étiquette. À défaut, elle reste au milieu.
+  const CANDIDATS = [0.5, 0.4, 0.6, 0.3, 0.7, 0.22, 0.78, 0.15, 0.85];
+  let etiquettesForcees = new Set();   // flux survolé directement : son étiquette s'affiche toujours
+  function placerEtiquettes() {
+    const toutes = svg.classList.contains('etiquettes-toutes');
+    const obstacles = [];
+    D.blocs.forEach((b) => {
+      const p = pos[b.id];
+      if (!p || !blocVisible(b)) return;
+      obstacles.push({ x1: p.x - p.w / 2 - 4, x2: p.x + p.w / 2 + 4, y1: p.y - p.h / 2 - 3, y2: p.y + p.h / 2 + 3 });
+    });
+    const posees = [];
+    const croise = (r, liste) => liste.some((o) => r.x1 < o.x2 && r.x2 > o.x1 && r.y1 < o.y2 && r.y2 > o.y1);
+    const touche = (r) => croise(r, obstacles) || croise(r, posees);
+    liens.forEach((l) => {
+      const visible = (toutes && !svg.classList.contains('a-focus')) || l._etq.classList.contains('visible');
+      if (!visible || !lienVisible(l)) return;
+      const L = l._trait.getTotalLength();
+      const { w, h } = l._etqTaille;
+      const essais = l.pos !== undefined ? [l.pos].concat(CANDIDATS) : CANDIDATS;
+      // 1re passe : ni composant ni étiquette ; 2e passe : au moins aucune autre étiquette ;
+      // 3e passe : décalage vertical par pas d'une hauteur d'étiquette
+      const rect = (pt, dy) => ({ x1: pt.x - w / 2, x2: pt.x + w / 2, y1: pt.y + dy - h / 2, y2: pt.y + dy + h / 2 });
+      const points = essais.map((t) => l._trait.getPointAtLength(L * t));
+      let choix = null;
+      for (let i = 0; i < points.length && !choix; i++) if (!touche(rect(points[i], 0))) choix = { pt: points[i], dy: 0 };
+      // Pas de place libre : l'étiquette se retire, sauf si ce flux est survolé directement
+      const forcee = etiquettesForcees.has(l.id);
+      l._etq.classList.toggle('sans-place', !choix && !forcee);
+      if (!choix && !forcee) return;
+      for (let i = 0; i < points.length && !choix; i++) if (!croise(rect(points[i], 0), posees)) choix = { pt: points[i], dy: 0 };
+      for (let k = 1; k < 8 && !choix; k++) {
+        [k, -k].forEach((sgn) => { if (!choix && !croise(rect(points[0], sgn * (h + 3)), posees)) choix = { pt: points[0], dy: sgn * (h + 3) }; });
+      }
+      if (!choix) choix = { pt: points[0], dy: 0 };
+      l._etq.setAttribute('transform', 'translate(' + choix.pt.x + ',' + (choix.pt.y + choix.dy) + ')');
+      posees.push(rect(choix.pt, choix.dy));
+    });
+  }
+
+  const curseur = document.getElementById('eclate');
+  const valeurEclat = document.getElementById('eclate-valeur');
+  let animIntro = null;
+  function reglerEclat(t, depuisCurseur) {
+    etat.eclat = borne(t, 0, 1);
+    const pc = Math.round(etat.eclat * 100);
+    if (!depuisCurseur) curseur.value = pc;
+    curseur.style.setProperty('--rempli', pc + '%');
+    valeurEclat.textContent = pc + ' %';
+    majGeometrie();
+  }
+  curseur.addEventListener('input', () => { cancelAnimationFrame(animIntro); reglerEclat(curseur.value / 100, true); });
+  function animerEclat(de, vers, duree) {
+    cancelAnimationFrame(animIntro);
+    if (mouvementReduit) { reglerEclat(vers); return; }
+    const t0 = performance.now();
+    const pasAnim = (t) => {
+      const f = borne((t - t0) / duree, 0, 1);
+      reglerEclat(de + (vers - de) * f);
+      if (f < 1) animIntro = requestAnimationFrame(pasAnim);
+    };
+    animIntro = requestAnimationFrame(pasAnim);
+  }
+
+  /* ============ 6. Chemins et mise en évidence ============ */
+
+  const blocVisible = (b) => !etat.couchesOff.has(b.couche);
+  const lienVisible = (l) => blocVisible(blocs[l.de]) && blocVisible(blocs[l.vers]) && !etat.typesOff.has(l.type);
+  // Un flux « avance » s'il va vers la droite ou reste dans sa couche (ex. catalogue MCP → Figma)
+  const avance = (l) => rangCouche[blocs[l.vers].couche] >= rangCouche[blocs[l.de].couche];
+  const prolonge = (l) => avance(l) && lienVisible(l) && l.type !== 'off';   // un flux hors service ne prolonge pas un chemin
+
+  // Amont : on remonte jusqu'aux entrées. Aval : on descend, en s'arrêtant aux pivots
+  // (orchestrateur, catalogue MCP) pour ne pas allumer toute la carte.
+  function amont(id, B, Ls) {
+    const pile = [id];
+    while (pile.length) {
+      const x = pile.pop();
+      (entrants[x] || []).forEach((l) => {
+        if (!prolonge(l)) return;
+        Ls.add(l.id);
+        if (!B.has(l.de)) { B.add(l.de); pile.push(l.de); }
+      });
+    }
+  }
+  function aval(id, B, Ls) {
+    const pile = [id];
+    while (pile.length) {
+      const x = pile.pop();
+      if (x !== id && blocs[x].pivot) continue;
+      (sortants[x] || []).forEach((l) => {
+        if (!prolonge(l)) return;
+        Ls.add(l.id);
+        if (!B.has(l.vers)) { B.add(l.vers); pile.push(l.vers); }
+      });
+    }
+  }
+  function cheminBloc(id) {
+    const B = new Set([id]);
+    const Ls = new Set();
+    amont(id, B, Ls);
+    aval(id, B, Ls);
+    (entrants[id] || []).concat(sortants[id] || []).forEach((l) => {
+      if (!lienVisible(l)) return;
+      Ls.add(l.id); B.add(l.de); B.add(l.vers);
+    });
+    return { B: B, Ls: Ls };
+  }
+  function cheminLien(l) {
+    const B = new Set([l.de, l.vers]);
+    const Ls = new Set([l.id]);
+    amont(l.de, B, Ls);
+    aval(l.vers, B, Ls);
+    return { B: B, Ls: Ls, etiquettes: new Set([l.id]) };
+  }
+
+  function focusCourant() {
+    const s = etat.survol;
+    if (s) {
+      if (s.type === 'lien') return cheminLien(lienParId[s.id]);
+      if (s.type === 'bloc') return cheminBloc(s.id);
+      if (s.type === 'couche') {
+        const B = new Set(D.blocs.filter((b) => b.couche === s.id).map((b) => b.id));
+        const Ls = new Set(liens.filter((l) => lienVisible(l) && (B.has(l.de) || B.has(l.vers))).map((l) => l.id));
+        return { B: B, Ls: Ls, etiquettes: new Set() };
+      }
+      if (s.type === 'flux') {
+        const Ls = new Set(liens.filter((l) => l.type === s.id && lienVisible(l)).map((l) => l.id));
+        const B = new Set();
+        Ls.forEach((id) => { B.add(lienParId[id].de); B.add(lienParId[id].vers); });
+        return { B: B, Ls: Ls };
+      }
+    }
+    if (etat.trouves) return { B: etat.trouves, Ls: new Set(), etiquettes: new Set() };
+    if (etat.selection) return cheminBloc(etat.selection);
+    if (etat.lecture.active) {
+      const e = etapes[etat.lecture.index];
+      return { B: new Set(e.blocs), Ls: new Set(e.liens) };
+    }
+    return null;
+  }
+
+  function appliquerFocus() {
+    const f = focusCourant();
+    svg.classList.toggle('a-focus', !!f);
+    // Étiquettes affichées : celles du chemin, sauf si le chemin est très long
+    const etq = f ? (f.etiquettes || (f.Ls.size <= 12 ? f.Ls : new Set())) : new Set();
+    etiquettesForcees = f && f.etiquettes ? f.etiquettes : new Set();
+    D.blocs.forEach((b) => {
+      b._g.classList.toggle('en-avant', !!f && f.B.has(b.id));
+      b._g.classList.toggle('selectionne', etat.selection === b.id);
+      b._g.classList.toggle('trouve', !!etat.trouves && etat.trouves.has(b.id));
+    });
+    liens.forEach((l) => {
+      const actif = !!f && f.Ls.has(l.id);
+      l._g.classList.toggle('actif', actif);
+      l._trait.setAttribute('marker-end', actif && l._fleches.fin ? 'url(#fl-' + l.type + ')' : '');
+      l._trait.setAttribute('marker-start', actif && l._fleches.debut ? 'url(#fl-' + l.type + ')' : '');
+      l._etq.classList.toggle('visible', etq.has(l.id));
+      if (l._badge) l._badge.classList.toggle('en-avant', actif);
+    });
+    // Les flux actifs passent au premier plan
+    liens.forEach((l) => { if (f && f.Ls.has(l.id)) gFlux.appendChild(l._g); });
+    placerEtiquettes();
+  }
+
+  /* ============ 7. Panneau de gauche ============ */
+
+  const listeCouches = document.getElementById('liste-couches');
+  const listeFlux = document.getElementById('liste-flux');
+  const panneauTitre = document.getElementById('panneau-titre');
+  const panneauCompteur = document.getElementById('panneau-compteur');
+  const piedCompte = document.getElementById('pied-compte');
+  let onglet = 'couches';
+
+  function interrupteur(actif, libelle, quandClic) {
+    const b = el('button', 'inter');
+    b.type = 'button';
+    b.setAttribute('role', 'switch');
+    b.setAttribute('aria-checked', String(actif));
+    b.setAttribute('aria-label', libelle);
+    b.addEventListener('click', quandClic);
+    return b;
+  }
+  function echantillon(type) {
+    const s = document.createElementNS(NS, 'svg');
+    s.setAttribute('viewBox', '0 0 28 12');
+    s.setAttribute('class', 'echantillon ech--' + type);
+    s.setAttribute('aria-hidden', 'true');
+    cree('path', { d: 'M1,6 L27,6' }, s);
+    return s;
+  }
+  function construirePanneau() {
+    listeCouches.innerHTML = '';
+    couches.forEach((c) => {
+      const n = D.blocs.filter((b) => b.couche === c.id).length;
+      const actif = !etat.couchesOff.has(c.id);
+      const li = el('li', 'ligne' + (actif ? '' : ' eteinte'), null, listeCouches);
+      el('span', 'ligne-num', deux(c.num), li);
+      const nom = el('span', 'ligne-nom', c.nom, li);
+      nom.title = c.nomLong + ' (§ ' + c.source + ')';
+      el('span', 'ligne-compte', String(n), li);
+      li.appendChild(interrupteur(actif, 'Afficher la couche ' + c.nom, () => {
+        if (actif) etat.couchesOff.add(c.id); else etat.couchesOff.delete(c.id);
+        appliquerFiltres();
+      }));
+      li.addEventListener('mouseenter', () => { etat.survol = { type: 'couche', id: c.id }; appliquerFocus(); });
+      li.addEventListener('mouseleave', () => { etat.survol = null; appliquerFocus(); });
+    });
+    listeFlux.innerHTML = '';
+    D.typesLiens.forEach((t) => {
+      const n = liens.filter((l) => l.type === t.id).length;
+      const actif = !etat.typesOff.has(t.id);
+      const li = el('li', 'ligne' + (actif ? '' : ' eteinte'), null, listeFlux);
+      li.appendChild(echantillon(t.id));
+      const nom = el('span', 'ligne-nom', t.nom, li);
+      nom.title = t.description;
+      el('span', 'ligne-compte', String(n), li);
+      li.appendChild(interrupteur(actif, 'Afficher les flux ' + t.nom, () => {
+        if (actif) etat.typesOff.add(t.id); else etat.typesOff.delete(t.id);
+        appliquerFiltres();
+      }));
+      li.addEventListener('mouseenter', () => { etat.survol = { type: 'flux', id: t.id }; appliquerFocus(); });
+      li.addEventListener('mouseleave', () => { etat.survol = null; appliquerFocus(); });
+    });
+    const nb = D.blocs.filter(blocVisible).length;
+    const nl = liens.filter(lienVisible).length;
+    panneauTitre.textContent = onglet === 'couches' ? 'Couches' : 'Flux';
+    panneauCompteur.textContent = onglet === 'couches' ? couches.length : D.typesLiens.length;
+    piedCompte.textContent = onglet === 'couches' ? nb + ' composants visibles' : nl + ' flux visibles';
+  }
+  document.querySelectorAll('.segment').forEach((s) => {
+    s.addEventListener('click', () => {
+      onglet = s.dataset.onglet;
+      document.querySelectorAll('.segment').forEach((x) => x.setAttribute('aria-selected', String(x === s)));
+      listeCouches.hidden = onglet !== 'couches';
+      listeFlux.hidden = onglet !== 'flux';
+      construirePanneau();
+    });
+  });
+  document.getElementById('tout-afficher').addEventListener('click', () => {
+    etat.couchesOff.clear();
+    etat.typesOff.clear();
+    appliquerFiltres();
+  });
+
+  function appliquerFiltres() {
+    couches.forEach((c) => c._g.classList.toggle('eteinte', etat.couchesOff.has(c.id)));
+    D.blocs.forEach((b) => b._g.classList.toggle('masque', !blocVisible(b)));
+    liens.forEach((l) => {
+      const v = lienVisible(l);
+      l._g.classList.toggle('masque', !v);
+      l._etq.classList.toggle('masque', !v);
+      if (l._badge) l._badge.classList.toggle('masque', !v);
+    });
+    if (etat.selection && !blocVisible(blocs[etat.selection])) fermerCarte();
+    construirePanneau();
+    appliquerFocus();
+  }
+
+  /* ============ 8. Carte de droite : fiche ============ */
+
+  const carteDroite = document.getElementById('carte-droite');
+  const ICONE_FERMER = '<svg viewBox="0 0 14 14"><path d="M2 2l10 10M12 2L2 12"/></svg>';
+  let vueAvantCarte = null;
+
+  function boutonFermer(quoi) {
+    const b = el('button', 'fermer', null, carteDroite);
+    b.type = 'button';
+    b.setAttribute('aria-label', 'Fermer (Échap)');
+    b.innerHTML = ICONE_FERMER;
+    b.addEventListener('click', quoi);
+    return b;
+  }
+
+  function ouvrirFiche(id) {
+    const b = blocs[id];
+    if (!b) return;
+    if (etat.lecture.active) quitterLecture(true);
+    etat.selection = id;
+    const c = coucheParId[b.couche];
+    const statut = b.statut || 'actif';
+    carteDroite.innerHTML = '';
+    const fermer = boutonFermer(fermerCarte);
+    el('p', 'micro', 'Couche ' + deux(c.num) + ' · ' + c.nom, carteDroite);
+    el('h2', 'fiche-titre', b.titre, carteDroite);
+    if (b.chiffre) el('p', 'fiche-chiffre', b.chiffre, carteDroite);
+    const puces = el('div', 'puces', null, carteDroite);
+    const ps = el('span', 'puce puce--' + statut, null, puces);
+    el('i', null, null, ps);
+    ps.appendChild(document.createTextNode(D.statuts[statut].nom));
+    el('span', 'puce', '§ ' + b.source, puces);
+
+    const dl = el('dl', 'rangs', null, carteDroite);
+    [['Rôle', b.fait], ['Machine', b.machine], ['Entrée', b.entre], ['Sortie', b.sort], ['Coût, latence', b.cout], ['Si ça tombe', b.casse]]
+      .forEach((r) => {
+        if (!r[1]) return;
+        const d = el('div', 'rang', null, dl);
+        el('dt', null, r[0], d);
+        el('dd', null, r[1], d);
+      });
+    if (b.mesure) {
+      const m = b.mesure;
+      const total = totalMesure(m);
+      const bloc = el('div', 'mesure', null, carteDroite);
+      const tete = el('div', 'preuve-tete', null, bloc);
+      el('p', 'micro', 'Mesure · ' + m.titre, tete);
+      el('span', 'micro', '§ ' + m.source, tete);
+      const barre = el('div', 'mesure-barre', null, bloc);
+      m.segments.forEach((seg, i) => {
+        const s0 = el('span', null, null, barre);
+        s0.style.flexGrow = seg.v;
+        s0.style.background = teinte(seg, i);
+      });
+      const reste = total - m.segments.reduce((a, x) => a + x.v, 0);
+      if (reste > 0) { const r0 = el('span', 'mesure-reste', null, barre); r0.style.flexGrow = reste; }
+      const leg = el('ul', 'mesure-legende', null, bloc);
+      m.segments.forEach((seg, i) => {
+        const li = el('li', null, null, leg);
+        const pastille = el('i', null, null, li);
+        pastille.style.background = teinte(seg, i);
+        el('span', null, seg.l, li);
+        el('b', null, seg.v.toLocaleString('fr-FR') + ' ' + m.unite, li);
+      });
+      if (m.max) {
+        const li = el('li', 'mesure-max', null, leg);
+        el('i', null, null, li);
+        el('span', null, 'plafond', li);
+        el('b', null, m.max.toLocaleString('fr-FR') + ' ' + m.unite, li);
+      }
+    }
+    if (b.note) el('p', 'note', 'À discuter · ' + b.note, carteDroite);
+
+    if (b.preuve) {
+      const p = el('div', 'preuve', null, carteDroite);
+      const tete = el('div', 'preuve-tete', null, p);
+      el('p', 'micro', 'Preuve · ' + b.preuve.titre, tete);
+      el('span', 'micro', '§ ' + b.preuve.source, tete);
+      el('pre', null, b.preuve.lignes.join('\n'), p);
+      if (b.preuve.note) el('p', 'preuve-note', b.preuve.note, p);
+    }
+
+    const voisins = (entrants[id] || []).concat(sortants[id] || []).filter(lienVisible);
+    if (voisins.length) {
+      el('p', 'micro', 'Connexions · ' + voisins.length, carteDroite).style.marginTop = '18px';
+      const ul = el('ul', 'connexions', null, carteDroite);
+      ul.style.marginTop = '6px';
+      voisins.forEach((l) => {
+        const autre = l.de === id ? l.vers : l.de;
+        const li = el('li', null, null, ul);
+        const btn = el('button', 'connexion', null, li);
+        btn.type = 'button';
+        btn.appendChild(echantillon(l.type));
+        const t = el('span', null, (l.de === id ? '→ ' : '← ') + blocs[autre].titre, btn);
+        el('small', null, types[l.type].nom + ' · ' + l.etiquette, t);
+        btn.addEventListener('click', () => ouvrirFiche(autre));
+        btn.addEventListener('mouseenter', () => { etat.survol = { type: 'lien', id: l.id }; appliquerFocus(); });
+        btn.addEventListener('mouseleave', () => { etat.survol = null; appliquerFocus(); });
+      });
+    }
+
+    carteDroite.hidden = false;
+    scene.classList.add('carte-ouverte');
+    carteDroite.scrollTop = 0;
+    if (!vueAvantCarte) vueAvantCarte = Object.assign({}, vue);
+    cadrer(cheminBloc(id).B, id);
+    appliquerFocus();
+    fermer.focus({ preventScroll: true });
+    adresse('bloc=' + id);
+  }
+
+  function fermerCarte() {
+    if (carteDroite.hidden) return;
+    const id = etat.selection;
+    carteDroite.hidden = true;
+    scene.classList.remove('carte-ouverte');
+    etat.selection = null;
+    if (vueAvantCarte) { vue = vueAvantCarte; vueAvantCarte = null; appliquerVue(); }
+    appliquerFocus();
+    if (id && blocs[id]._g) blocs[id]._g.focus({ preventScroll: true });
+    adresse('');
+  }
+
+  /* ============ 9. Parcours ============ */
+
+  const btnLecture = document.getElementById('btn-lecture');
+  let animJeton = null;
+  let cheminsJeton = [];
+
+  function demarrerLecture(i, jouer) {
+    if (!carteDroite.hidden && etat.selection) fermerCarte();
+    if (!vueAvantCarte) vueAvantCarte = Object.assign({}, vue);
+    etat.lecture.active = true;
+    allerEtape(i);
+    if (jouer) reprendre(); else pause();
+  }
+  function quitterLecture(silencieux) {
+    clearTimeout(etat.lecture.minuterie);
+    cancelAnimationFrame(animJeton);
+    etat.lecture.active = false;
+    etat.lecture.enCours = false;
+    cheminsJeton = [];
+    gJeton.setAttribute('visibility', 'hidden');
+    btnLecture.classList.remove('en-cours');
+    if (!silencieux) {
+      carteDroite.hidden = true;
+      scene.classList.remove('carte-ouverte');
+      if (vueAvantCarte) { vue = vueAvantCarte; vueAvantCarte = null; appliquerVue(); }
+      adresse('');
+    }
+    appliquerFocus();
+  }
+  function reprendre() {
+    etat.lecture.enCours = true;
+    planifier();
+    animerJeton(etapes[etat.lecture.index].liens, true);
+    majEtatLecture();
+  }
+  function pause() {
+    etat.lecture.enCours = false;
+    clearTimeout(etat.lecture.minuterie);
+    majEtatLecture();
+  }
+  function basculerLecture() {
+    if (!etat.lecture.active) demarrerLecture(0, true);
+    else if (etat.lecture.enCours) { pause(); figerJeton(); }
+    else reprendre();
+  }
+  function planifier() {
+    clearTimeout(etat.lecture.minuterie);
+    if (!etat.lecture.enCours) return;
+    etat.lecture.minuterie = setTimeout(() => {
+      if (etat.lecture.index < etapes.length - 1) { allerEtape(etat.lecture.index + 1); planifier(); }
+      else { pause(); figerJeton(); }
+    }, (D.scenario.dureeEtape || 10) * 1000);
+  }
+  function majEtatLecture() {
+    btnLecture.classList.toggle('en-cours', etat.lecture.enCours);
+    btnLecture.setAttribute('aria-label', etat.lecture.enCours ? 'Mettre le parcours en pause' : 'Lancer le parcours');
+    const etiq = carteDroite.querySelector('.etat');
+    if (etiq) etiq.textContent = etat.lecture.enCours ? 'Lecture · ' + (D.scenario.dureeEtape || 10) + ' s par étape' : 'En pause';
+    const bp = carteDroite.querySelector('.bouton-lecture');
+    if (bp) bp.innerHTML = etat.lecture.enCours
+      ? '<svg viewBox="0 0 14 14"><path d="M3 2h3v10H3zM8 2h3v10H8z"/></svg>Pause'
+      : '<svg viewBox="0 0 14 14"><path d="M3.5 2v10l8-5z"/></svg>Lire';
+  }
+
+  function allerEtape(i) {
+    i = borne(i, 0, etapes.length - 1);
+    etat.lecture.index = i;
+    const e = etapes[i];
+    carteDroite.innerHTML = '';
+    boutonFermer(() => quitterLecture(false));
+    el('p', 'micro', 'Parcours · ' + D.scenario.titre, carteDroite);
+    const num = el('div', 'etape-num', null, carteDroite);
+    el('b', null, deux(i + 1), num);
+    el('span', null, '/ ' + deux(etapes.length), num);
+    el('h2', 'etape-titre', e.titre, carteDroite);
+    el('p', 'etape-texte', e.texte, carteDroite);
+    const dl = el('dl', 'rangs', null, carteDroite);
+    [['Où', e.ou], ['Fichier', e.fichier], ['Source', '§ ' + e.source]].forEach((r) => {
+      const d = el('div', 'rang', null, dl);
+      el('dt', null, r[0], d);
+      el('dd', null, r[1], d);
+    });
+    const prog = el('div', 'progression', null, carteDroite);
+    etapes.forEach((x, k) => {
+      const b = el('button', k < i ? 'fait' : null, null, prog);
+      b.type = 'button';
+      b.title = deux(k + 1) + ' · ' + x.titre;
+      b.setAttribute('aria-label', 'Étape ' + (k + 1) + ' : ' + x.titre);
+      if (k === i) b.setAttribute('aria-current', 'step');
+      b.addEventListener('click', () => { pause(); allerEtape(k); });
+    });
+    const cmd = el('div', 'commandes-etape', null, carteDroite);
+    const prec = el('button', 'bouton', '←', cmd);
+    prec.type = 'button';
+    prec.setAttribute('aria-label', 'Étape précédente');
+    prec.addEventListener('click', () => { pause(); allerEtape(etat.lecture.index - 1); });
+    const lire = el('button', 'bouton bouton--plein bouton-lecture', null, cmd);
+    lire.type = 'button';
+    lire.addEventListener('click', basculerLecture);
+    const suiv = el('button', 'bouton', '→', cmd);
+    suiv.type = 'button';
+    suiv.setAttribute('aria-label', 'Étape suivante');
+    suiv.addEventListener('click', () => { pause(); allerEtape(etat.lecture.index + 1); });
+    el('span', 'etat', '', cmd);
+    carteDroite.hidden = false;
+    scene.classList.add('carte-ouverte');
+    majEtatLecture();
+    cadrer(new Set(e.blocs));
+    appliquerFocus();
+    animerJeton(e.liens, etat.lecture.enCours);
+    adresse('etape=' + (i + 1));
+  }
+
+  // Le jeton parcourt les flux de l'étape l'un après l'autre ; il boucle pendant la lecture.
+  function animerJeton(ids, boucle) {
+    cancelAnimationFrame(animJeton);
+    cheminsJeton = ids.map((id) => lienParId[id]).filter((l) => l && lienVisible(l)).map((l) => l._trait);
+    if (!cheminsJeton.length) { gJeton.setAttribute('visibility', 'hidden'); return; }
+    gJeton.setAttribute('visibility', 'visible');
+    placerJeton(cheminsJeton[0], 0);
+    if (mouvementReduit) { figerJeton(); return; }
+    const n = cheminsJeton.length;
+    let t0 = performance.now();
+    const avancer = (t) => {
+      let k = (t - t0) / R.dureeLien;
+      if (k >= n + 0.6) {
+        if (boucle && etat.lecture.enCours) { t0 = t; k = 0; } else { figerJeton(); return; }
+      }
+      const i = Math.min(Math.floor(k), n - 1);
+      placerJeton(cheminsJeton[i], adoucir(Math.min(1, k - i)));
+      animJeton = requestAnimationFrame(avancer);
+    };
+    animJeton = requestAnimationFrame(avancer);
+  }
+  function placerJeton(chemin, f) {
+    const pt = chemin.getPointAtLength(chemin.getTotalLength() * f);
+    gJeton.setAttribute('transform', 'translate(' + pt.x + ',' + pt.y + ')');
+  }
+  function figerJeton() {
+    cancelAnimationFrame(animJeton);
+    if (cheminsJeton.length) placerJeton(cheminsJeton[cheminsJeton.length - 1], 1);
+  }
+  btnLecture.addEventListener('click', basculerLecture);
+
+  /* ============ 10. Recherche ============ */
+
+  const champ = document.getElementById('recherche');
+  champ.addEventListener('input', () => {
+    const q = sansAccents(champ.value.trim());
+    if (!q) { etat.trouves = null; appliquerFocus(); return; }
+    etat.trouves = new Set(D.blocs.filter((b) => blocVisible(b) &&
+      sansAccents(b.titre + ' ' + (b.chiffre || '') + ' ' + b.id + ' ' + (b.machine || '')).indexOf(q) >= 0).map((b) => b.id));
+    appliquerFocus();
+  });
+  champ.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && etat.trouves && etat.trouves.size) {
+      const id = Array.from(etat.trouves)[0];
+      champ.value = ''; etat.trouves = null; champ.blur();
+      ouvrirFiche(id);
+    } else if (e.key === 'Escape') {
+      champ.value = ''; etat.trouves = null; champ.blur(); appliquerFocus();
+      e.stopPropagation();
+    }
+  });
+
+  /* ============ 11. Zoom, déplacement, cadrage ============ */
+
+  const vueInitiale = { x: 0, y: 0, w: 1920, h: 1080 };
+  let vue = Object.assign({}, vueInitiale);
+  function appliquerVue() { svg.setAttribute('viewBox', vue.x + ' ' + vue.y + ' ' + vue.w + ' ' + vue.h); }
+  function versCarte(cx, cy) {
+    const p = svg.createSVGPoint();
+    p.x = cx; p.y = cy;
+    return p.matrixTransform(svg.getScreenCTM().inverse());
+  }
+  function zoomer(f, cx, cy) {
+    if (cx === undefined) { cx = vue.x + vue.w / 2; cy = vue.y + vue.h / 2; }
+    const w = borne(vue.w / f, 1920 / 4, 1920 * 1.4);
+    const k = w / vue.w;
+    vue = { x: cx - (cx - vue.x) * k, y: cy - (cy - vue.y) * k, w: w, h: vue.h * k };
+    vueAvantCarte = null;
+    appliquerVue();
+  }
+  function recentrer() { vue = Object.assign({}, vueInitiale); vueAvantCarte = null; appliquerVue(); }
+
+  // Si des composants passent sous la carte de droite, la carte glisse vers la gauche
+  // (zone visible : entre le panneau de gauche et la carte de droite).
+  function cadrer(ids) {
+    const base0 = vueAvantCarte || vue;
+    vue = Object.assign({}, base0);
+    const liste = Array.from(ids).filter((id) => pos[id] && blocVisible(blocs[id]));
+    if (!liste.length) { appliquerVue(); return; }
+    const k = 1920 / vue.w;
+    const gauche = Math.min.apply(null, liste.map((id) => pos[id].x - pos[id].w / 2));
+    const droite = Math.max.apply(null, liste.map((id) => pos[id].x + pos[id].w / 2));
+    const ecranG = (gauche - vue.x) * k;
+    const ecranD = (droite - vue.x) * k;
+    const zoneG = 60;      // le panneau de gauche s'efface quand une carte est ouverte
+    const zoneD = 1920 - 88 - 420 - 40;
+    if (ecranD > zoneD || ecranG < zoneG) {
+      const largeurZone = zoneD - zoneG;
+      const largeurSel = ecranD - ecranG;
+      const cible = largeurSel <= largeurZone ? zoneG + (largeurZone - largeurSel) / 2 : zoneG;
+      vue.x += (ecranG - cible) / k;
+    }
+    appliquerVue();
+  }
+
+  svg.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const p = versCarte(e.clientX, e.clientY);
+    zoomer(Math.pow(1.0018, -e.deltaY), p.x, p.y);
+  }, { passive: false });
+  let glisse = null;
+  svg.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0 || e.target.closest('.noeud')) return;
+    glisse = { x: e.clientX, y: e.clientY, vx: vue.x, vy: vue.y, bouge: false };
+    svg.setPointerCapture(e.pointerId);
+  });
+  svg.addEventListener('pointermove', (e) => {
+    if (!glisse) return;
+    const dx = e.clientX - glisse.x;
+    const dy = e.clientY - glisse.y;
+    if (!glisse.bouge && Math.hypot(dx, dy) < 4) return;
+    glisse.bouge = true;
+    svg.classList.add('glisse');
+    const a = svg.getScreenCTM().a;
+    vue.x = glisse.vx - dx / a;
+    vue.y = glisse.vy - dy / a;
+    vueAvantCarte = null;
+    appliquerVue();
+  });
+  svg.addEventListener('pointerup', () => {
+    if (glisse && !glisse.bouge && etat.selection) fermerCarte();   // clic sur le fond : ferme la fiche
+    glisse = null;
+    svg.classList.remove('glisse');
+  });
+  document.getElementById('btn-zoom-plus').addEventListener('click', () => zoomer(1.25));
+  document.getElementById('btn-zoom-moins').addEventListener('click', () => zoomer(0.8));
+  document.getElementById('btn-zoom-zero').addEventListener('click', recentrer);
+  // Panneau des couches et des flux : replié par défaut
+  const btnPanneau = document.getElementById('btn-panneau');
+  btnPanneau.addEventListener('click', () => {
+    const ouvert = !scene.classList.contains('panneau-ouvert');
+    scene.classList.toggle('panneau-ouvert', ouvert);
+    btnPanneau.setAttribute('aria-pressed', String(ouvert));
+  });
+  const btnEtq = document.getElementById('btn-etiquettes');
+  btnEtq.addEventListener('click', () => {
+    const v = btnEtq.getAttribute('aria-pressed') !== 'true';
+    btnEtq.setAttribute('aria-pressed', String(v));
+    svg.classList.toggle('etiquettes-toutes', v);
+    placerEtiquettes();
+  });
+
+  /* ============ 12. Export PNG ============ */
+
+  // Les styles viennent d'une feuille externe : on les recopie en ligne sur le clone.
+  const PROPS = ['fill', 'fill-opacity', 'stroke', 'stroke-width', 'stroke-dasharray', 'stroke-dashoffset', 'stroke-linecap',
+    'stroke-linejoin', 'stroke-opacity', 'opacity', 'display', 'visibility', 'font-family', 'font-size', 'font-weight',
+    'letter-spacing', 'text-transform', 'text-anchor', 'dominant-baseline'];
+  function copierStyles(src, dst) {
+    if (src.nodeType !== 1) return;
+    const cs = getComputedStyle(src);
+    dst.setAttribute('style', PROPS.map((p) => p + ':' + cs.getPropertyValue(p)).join(';'));
+    for (let i = 0; i < src.children.length; i++) copierStyles(src.children[i], dst.children[i]);
+  }
+  function exporterPNG() {
+    const E = 2;
+    const W = 1920 * E;
+    const H = 1080 * E;
+    const clone = svg.cloneNode(true);
+    copierStyles(svg, clone);
+    clone.setAttribute('xmlns', NS);
+    clone.setAttribute('width', W);
+    clone.setAttribute('height', H);
+    // Les majuscules CSS ne passent pas dans l'image : on les applique au texte
+    clone.querySelectorAll('.couche-nom').forEach((t) => { t.textContent = t.textContent.toUpperCase(); });
+    const img = new Image();
+    img.onload = () => {
+      const c = document.createElement('canvas');
+      c.width = W; c.height = H;
+      const ctx = c.getContext('2d');
+      const grad = ctx.createRadialGradient(W * 0.58, H * 0.5, 0, W * 0.58, H * 0.5, W * 0.6);
+      grad.addColorStop(0, cssVal('--halo'));
+      grad.addColorStop(0.7, cssVal('--scene'));
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, W, H);
+      ctx.drawImage(img, 0, 0, W, H);
+      // En-tête de l'image
+      const police = cssVal('--police');
+      ctx.fillStyle = cssVal('--encre-3');
+      ctx.font = '600 ' + 12 * E + 'px ' + police;
+      ctx.fillText((D.meta.surtitre || '').toUpperCase(), 40 * E, 46 * E);
+      ctx.fillStyle = cssVal('--encre');
+      ctx.font = '650 ' + 44 * E + 'px ' + police;
+      ctx.fillText(D.meta.titre, 40 * E, 96 * E);
+      ctx.fillStyle = cssVal('--encre-3');
+      ctx.font = 14 * E + 'px ' + police;
+      ctx.fillText('Source : ' + D.meta.sourceCourte, 40 * E, 124 * E);
+      if (etat.lecture.active) {
+        const e = etapes[etat.lecture.index];
+        ctx.fillStyle = cssVal('--encre');
+        ctx.font = '650 ' + 26 * E + 'px ' + police;
+        ctx.fillText(deux(etat.lecture.index + 1) + ' · ' + e.titre, 40 * E, 1020 * E);
+        ctx.fillStyle = cssVal('--encre-2');
+        ctx.font = 15 * E + 'px ' + police;
+        ctx.fillText(e.ou + '  ·  ' + e.fichier, 40 * E, 1048 * E);
+      }
+      c.toBlob((blob) => {
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'hermes-atlas-' + (etat.lecture.active ? 'etape-' + (etat.lecture.index + 1) : etat.selection ? etat.selection : 'vue') + '.png';
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+      }, 'image/png');
+    };
+    img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(new XMLSerializer().serializeToString(clone));
+  }
+  document.getElementById('btn-export').addEventListener('click', exporterPNG);
+
+  /* ============ 13. Clavier, adresse, démarrage ============ */
+
+  function adresse(fragment) {
+    try { history.replaceState(null, '', fragment ? '#' + fragment : location.pathname + location.search); }
+    catch (err) { /* sans conséquence */ }
+  }
+
+  document.addEventListener('keydown', (e) => {
+    const t = e.target;
+    const saisie = t && (t.tagName === 'INPUT' && t.type !== 'range');
+    if (saisie) return;
+    const dansBouton = t && (t.tagName === 'BUTTON');
+    if (e.key === ' ' && !dansBouton) { e.preventDefault(); basculerLecture(); }
+    else if (e.key === 'Escape') {
+      if (etat.lecture.active) quitterLecture(false);
+      else if (etat.selection) fermerCarte();
+    } else if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+      if (t && t.type === 'range') return;
+      if (!etat.lecture.active) { if (e.key === 'ArrowRight') demarrerLecture(0, false); return; }
+      e.preventDefault();
+      pause();
+      allerEtape(etat.lecture.index + (e.key === 'ArrowRight' ? 1 : -1));
+    } else if (e.key === '0' && !e.metaKey && !e.ctrlKey) recentrer();
+    else if ((e.key === '+' || e.key === '=') && !e.metaKey && !e.ctrlKey) zoomer(1.25);
+    else if (e.key === '-' && !e.metaKey && !e.ctrlKey) zoomer(0.8);
+    else if (e.key === '/') { e.preventDefault(); champ.focus(); }
+  });
+
+  // Textes de la scène
+  document.getElementById('surtitre').textContent = D.meta.surtitre || '';
+  document.getElementById('titre').textContent = D.meta.titre;
+  document.title = D.meta.titre;
+  const sl = document.getElementById('sous-ligne');
+  [[D.blocs.length, ' composants'], [couches.length, ' couches'], [liens.length, ' flux'], [etapes.length, ' étapes de parcours']]
+    .forEach((p, i) => {
+      if (i) sl.appendChild(document.createTextNode('  ·  '));
+      el('b', null, String(p[0]), sl);
+      sl.appendChild(document.createTextNode(p[1]));
+    });
+  document.getElementById('source').textContent = 'Source : ' + D.meta.sourceCourte;
+
+  appliquerVue();
+  construirePanneau();
+
+  // Adresse d'arrivée : #bloc=bl, #etape=8, #eclat=40 (pour préparer un cours ou une capture)
+  const params = new URLSearchParams(location.hash.slice(1));
+  const eclatDemande = params.get('eclat');
+  if (eclatDemande !== null || params.get('bloc') || params.get('etape') || mouvementReduit) {
+    reglerEclat(eclatDemande !== null ? parseInt(eclatDemande, 10) / 100 : 1);
+  } else {
+    // À l'ouverture : le programme se déploie en neuf couches
+    reglerEclat(0);
+    setTimeout(() => animerEclat(0, 1, R.dureeIntro), 350);
+  }
+  appliquerFiltres();
+  if (params.get('bloc') && blocs[params.get('bloc')]) ouvrirFiche(params.get('bloc'));
+  else if (params.get('etape')) demarrerLecture(parseInt(params.get('etape'), 10) - 1, false);
+})();
+
+</script>
+</body>
+</html>
